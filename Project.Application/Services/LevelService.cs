@@ -1,0 +1,52 @@
+﻿using Project.Application.DTOs.LevelDTO;
+using Project.Application.Interfaces.Services;
+using Project.Domain.Entities;
+using Project.Domain.Interfaces.Repositories;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Project.Application.Services
+{
+    public class LevelService : ILevelService
+    {
+        private readonly ILevelRepository _repository;
+
+        public LevelService(ILevelRepository repository)
+        {
+            _repository = repository;
+        }
+
+        public async Task<List<LevelResponseDto>> GetAllAsync()
+        {
+            var levels = await _repository.GetAllAsync();
+
+            return levels.Select(l => new LevelResponseDto
+            {
+                Id = l.Id,
+                Name = l.Name,
+                Status = l.Status
+            }).ToList();
+        }
+
+        public async Task<LevelResponseDto> CreateAsync(LevelCreateDto dto)
+        {
+            var level = new Level
+            {
+                Name = dto.Name,
+                Status = dto.Status
+            };
+
+            await _repository.AddAsync(level);
+
+            return new LevelResponseDto
+            {
+                Id = level.Id,
+                Name = level.Name,
+                Status = level.Status
+            };
+        }
+    }
+}
