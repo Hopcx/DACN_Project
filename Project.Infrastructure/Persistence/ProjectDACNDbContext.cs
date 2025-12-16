@@ -71,7 +71,7 @@ namespace Project.Infrastructure.Persistence
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            optionsBuilder.UseSqlServer(@"Server=LAPTOP-CXH2410\SQLEXPRESS;Database=ProjectDACN;Trusted_Connection=True;TrustServerCertificate=True;");
+            optionsBuilder.UseSqlServer(@"Server=LAPTOP-CXH2410\SQLEXPRESS;Database=ProjectDACN;Trusted_Connection=True;TrustServerCertificate=True;");// dev/Hop
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
