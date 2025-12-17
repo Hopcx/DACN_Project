@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Project.Domain.Interfaces.Repositories;
 
 namespace Project.Application
 {
@@ -15,6 +16,7 @@ namespace Project.Application
             this IServiceCollection services)
         {
             services.AddScoped<ILevelService, LevelService>();
+            services.AddScoped<IRoomService, RoomService>();
             return services;
         }
     }

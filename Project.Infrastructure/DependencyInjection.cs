@@ -15,6 +15,7 @@ namespace Project.Infrastructure
             this IServiceCollection services)
         {
             services.AddScoped<ILevelRepository, LevelRepository>();
+            services.AddScoped<IRoomRepository, RoomRepository>();
             return services;
         }
     }
