@@ -9,33 +9,32 @@ using System.Threading.Tasks;
 
 namespace Project.Infrastructure.Persistence.Repositories
 {
-    public class LevelRepository : ILevelRepository
+    public class RoomRepository : IRoomRepository
     {
         private readonly ProjectDACNDbContext _context;
-
-        public LevelRepository(ProjectDACNDbContext context)
+        public RoomRepository(ProjectDACNDbContext context)
         {
             _context = context;
         }
-
-        public async Task<List<Level>> GetAllAsync()
-            => await _context.Levels.AsNoTracking().ToListAsync();
-
-        public async Task<Level?> GetByIdAsync(int id)
-            => await _context.Levels.FindAsync(id);
-
-        public async Task AddAsync(Level level)
+        public async Task AddAsync(Room room)
         {
             try
             {
-                _context.Levels.Add(level);
+                _context.Rooms.Add(room);
                 await _context.SaveChangesAsync();
             }
             catch (Exception)
             {
+
                 throw;
             }
         }
-    }
 
+        public async Task<List<Room>> GetAllAsync()
+            => await _context.Rooms.AsNoTracking().ToListAsync();
+        
+
+        public async Task<Room?> GetByIdAsync(int id)
+            => await _context.Rooms.FindAsync(id);
+    }
 }
