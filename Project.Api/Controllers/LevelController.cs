@@ -7,7 +7,7 @@ using Project.Application.Interfaces.Services;
 namespace Project.Api.Controllers
 {
     [ApiController]
-    [Route("api/levels")]
+    [Route("web/levels")]
     public class LevelController : ControllerBase
     {
         private readonly ILevelService _service;
@@ -18,16 +18,16 @@ namespace Project.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAllLevelAsync()
         {
-            var result = await _service.GetAllAsync();
+            var result = await _service.GetAllLevelAsync();
             return Ok(ApiResponse<List<LevelResponseDto>>.Ok(result));
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create(LevelCreateDto dto)
+        public async Task<IActionResult> CreateLevelAsync(LevelCreateDto dto)
         {
-            var result = await _service.CreateAsync(dto);
+            var result = await _service.CreateLevelAsync(dto);
             return Created("", ApiResponse<LevelResponseDto>.Ok(result));
         }
     }

@@ -19,9 +19,9 @@ namespace Project.Application.Services
             _repository = repository;
         }
 
-        public async Task<List<LevelResponseDto>> GetAllAsync()
+        public async Task<List<LevelResponseDto>> GetAllLevelAsync()
         {
-            var levels = await _repository.GetAllAsync();
+            var levels = await _repository.GetAllLevelAsync();
 
             return levels.Select(l => new LevelResponseDto
             {
@@ -31,7 +31,7 @@ namespace Project.Application.Services
             }).ToList();
         }
 
-        public async Task<LevelResponseDto> CreateAsync(LevelCreateDto dto)
+        public async Task<LevelResponseDto> CreateLevelAsync(LevelCreateDto dto)
         {
             var level = new Level
             {
@@ -39,14 +39,18 @@ namespace Project.Application.Services
                 Status = dto.Status
             };
 
-            await _repository.AddAsync(level);
+            var createdLevel = await _repository.CreateLevelAsync(level);
+
+            if (createdLevel == null)
+                return null;
 
             return new LevelResponseDto
             {
-                Id = level.Id,
-                Name = level.Name,
-                Status = level.Status
+                Id = createdLevel.Id,
+                Name = createdLevel.Name,
+                Status = createdLevel.Status
             };
         }
     }
+
 }
