@@ -9,8 +9,8 @@ namespace Project.Application.Interfaces.Services
 {
     public interface ILevelService
     {
-        Task<List<LevelResponseDto>> GetAllAsync();
-        Task<LevelResponseDto> CreateAsync(LevelCreateDto dto);
+        Task<List<LevelResponseDto>> GetAllLevelAsync();
+        Task<LevelResponseDto> CreateLevelAsync(LevelCreateDto dto);
     }
 
 }

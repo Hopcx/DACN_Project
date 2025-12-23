@@ -9,7 +9,7 @@ namespace Project.Application.Interfaces.Services
 {
     public interface IRoomService
     {
-        Task<List<RoomResponseDto>> GetAllAsync();
-        Task<RoomResponseDto> CreateAsync(RoomCreateDto dto);
+        Task<List<RoomResponseDto>> GetAllRoomAsync();
+        Task<RoomResponseDto> CreateRoomAsync(RoomCreateDto dto);
     }
 }

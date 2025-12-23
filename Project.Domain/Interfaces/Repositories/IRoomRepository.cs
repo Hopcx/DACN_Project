@@ -9,8 +9,10 @@ namespace Project.Domain.Interfaces.Repositories
 {
     public interface IRoomRepository
     {
-        Task<List<Room>> GetAllAsync();
-        Task<Room?> GetByIdAsync(int id);
-        Task AddAsync(Room room);
+        Task<List<Room>> GetAllRoomAsync();
+        Task<Room> GetRoomByIdAsync(int id);
+        Task<Room> CreateRoomAsync(Room r);
+        Task<Room> UpdateRoomAsync(Room r);
+        Task<Room> DeleteRoomAsync(int id);
     }
 }

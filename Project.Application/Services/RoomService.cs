@@ -14,11 +14,13 @@ namespace Project.Application.Services
     public class RoomService : IRoomService
     {
         private readonly IRoomRepository _repository;
+
         public RoomService(IRoomRepository repository)
         {
             _repository = repository;
         }
-        public async Task<RoomResponseDto> CreateAsync(RoomCreateDto dto)
+
+        public async Task<RoomResponseDto> CreateRoomAsync(RoomCreateDto dto)
         {
             var room = new Room
             {
@@ -27,22 +29,27 @@ namespace Project.Application.Services
                 Address = dto.Address,
                 Status = dto.Status ?? true
             };
-            await _repository.AddAsync(room);
+
+            var createdRoom = await _repository.CreateRoomAsync(room);
+
+            if (createdRoom == null)
+                return null;
+
             return new RoomResponseDto
             {
-                Id = room.Id,
-                Name = room.Name,
-                Capacity = room.Capacity,
-                Address = room.Address,
-                Status = room.Status
+                Id = createdRoom.Id,
+                Name = createdRoom.Name,
+                Capacity = createdRoom.Capacity,
+                Address = createdRoom.Address,
+                Status = createdRoom.Status
             };
         }
 
-        public async Task<List<RoomResponseDto>> GetAllAsync()
+        public async Task<List<RoomResponseDto>> GetAllRoomAsync()
         {
-            var room = await _repository.GetAllAsync();
+            var rooms = await _repository.GetAllRoomAsync();
 
-            return room.Select(r => new RoomResponseDto
+            return rooms.Select(r => new RoomResponseDto
             {
                 Id = r.Id,
                 Name = r.Name,
@@ -52,4 +59,5 @@ namespace Project.Application.Services
             }).ToList();
         }
     }
+
 }

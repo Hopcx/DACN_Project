@@ -7,7 +7,7 @@ using Project.Application.Interfaces.Services;
 namespace Project.Api.Controllers
 {
     [ApiController]
-    [Route("api/rooms")]
+    [Route("web/rooms")]
     public class RoomController : ControllerBase
     {
         private readonly IRoomService _service;
@@ -16,16 +16,16 @@ namespace Project.Api.Controllers
             _service = service;
         }
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAllRoomAsync()
         {
-            var result = await _service.GetAllAsync();
+            var result = await _service.GetAllRoomAsync();
             return Ok(ApiResponse<List<RoomResponseDto>>.Ok(result));
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create(RoomCreateDto dto)
+        public async Task<IActionResult> CreateRoomAsync(RoomCreateDto dto)
         {
-            var result = await _service.CreateAsync(dto);
+            var result = await _service.CreateRoomAsync(dto);
             return Created("", ApiResponse<RoomResponseDto>.Ok(result));
         }
     }
