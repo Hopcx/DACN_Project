@@ -16,12 +16,23 @@ namespace Project.Infrastructure.Persistence.Repositories
         {
             _context = context;
         }
-        public async Task AddAsync(Room room)
+        public async Task<List<Room>> GetAllRoomAsync()
+        {
+            return await _context.Rooms.ToListAsync();
+        }
+
+        public async Task<Room> GetRoomByIdAsync(int id)
+        {
+            return await _context.Rooms.FindAsync(id);
+        }
+
+        public async Task<Room> CreateRoomAsync(Room r)
         {
             try
             {
-                _context.Rooms.Add(room);
+                var addRoom = _context.Rooms.Add(r).Entity;
                 await _context.SaveChangesAsync();
+                return addRoom;
             }
             catch (Exception)
             {
@@ -30,11 +41,41 @@ namespace Project.Infrastructure.Persistence.Repositories
             }
         }
 
-        public async Task<List<Room>> GetAllAsync()
-            => await _context.Rooms.AsNoTracking().ToListAsync();
-        
+        public async Task<Room> UpdateRoomAsync(Room r)
+        {
+            try
+            {
+                var updateRoom = _context.Rooms.Find(r.Id);
 
-        public async Task<Room?> GetByIdAsync(int id)
-            => await _context.Rooms.FindAsync(id);
+                updateRoom.Name = r.Name;
+                updateRoom.Status = r.Status;
+                updateRoom.Capacity = r.Capacity;
+                var objRoom = _context.Rooms.Update(updateRoom).Entity;
+                await _context.SaveChangesAsync();
+                return objRoom;
+            }
+            catch (Exception)
+            {
+
+                return null;
+            }
+        }
+
+        public async Task<Room> DeleteRoomAsync(int id)
+        {
+            try
+            {
+                var deleteRoom = _context.Rooms.Find(id);
+
+                var objRoom = _context.Rooms.Remove(deleteRoom).Entity;
+                await _context.SaveChangesAsync();
+                return objRoom;
+            }
+            catch (Exception)
+            {
+
+                return null;
+            }
+        }
     }
 }
