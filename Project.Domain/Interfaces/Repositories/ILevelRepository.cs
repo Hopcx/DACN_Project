@@ -14,5 +14,6 @@ namespace Project.Domain.Interfaces.Repositories
         Task<Level> CreateLevelAsync(Level r);
         Task<Level> UpdateLevelAsync(Level r);
         Task<Level> DeleteLevelAsync(int id);
+        Task<List<User>> GetUserByIdLevel(int levelId, string? textSearch);
     }
 }
