@@ -11,5 +11,7 @@ namespace Project.Application.Interfaces.Services
     {
         Task<List<RoomResponseDto>> GetAllRoomAsync();
         Task<RoomResponseDto> CreateRoomAsync(RoomCreateDto dto);
+        Task<RoomResponseDto> UpdateRoomAsync(int id,RoomCreateDto dto);
+        Task<bool> DeleteRoomAsync(int id);
     }
 }

@@ -17,6 +17,7 @@ namespace Project.Application
         {
             services.AddScoped<ILevelService, LevelService>();
             services.AddScoped<IRoomService, RoomService>();
+            services.AddScoped<IPermissionService, PermissionService>();
             return services;
         }
     }

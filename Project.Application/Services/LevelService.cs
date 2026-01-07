@@ -52,30 +52,7 @@ namespace Project.Application.Services
             };
         }
 
-        public async Task<LevelResponseDto> UpdateLevelAsync(LevelUpdateDto dto)
-        {
-            // Tạo entity từ DTO
-            var level = new Level
-            {
-                Id = dto.Id,
-                Name = dto.Name,
-                Status = dto.Status
-            };
-
-            // Gọi repository để update
-            var updatedLevel = await _repository.UpdateLevelAsync(level);
-
-            if (updatedLevel == null)
-                return null;
-
-            // Trả về DTO response
-            return new LevelResponseDto
-            {
-                Id = updatedLevel.Id,
-                Name = updatedLevel.Name,
-                Status = updatedLevel.Status
-            };
-        }
+        
 
         public async Task<bool> DeleteLevelAsync(int id)
         {
@@ -100,6 +77,27 @@ namespace Project.Application.Services
                 LevelId = u.LevelId
             }).ToList();
         }
+
+        public async Task<LevelResponseDto> UpdateLevelAsync(int id, LevelCreateDto dto)
+        {
+            var level = new Level
+            {
+                Name = dto.Name,
+                Status = dto.Status
+            };
+
+            var updatedLevel = await _repository.UpdateLevelAsync(id, level);
+            if (updatedLevel == null)
+                return null;
+
+            return new LevelResponseDto
+            {
+                Id = updatedLevel.Id,
+                Name = updatedLevel.Name,
+                Status = updatedLevel.Status
+            };
+        }
+
     }
 
 }

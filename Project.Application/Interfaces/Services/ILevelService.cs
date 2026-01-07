@@ -11,7 +11,8 @@ namespace Project.Application.Interfaces.Services
     {
         Task<List<LevelResponseDto>> GetAllLevelAsync();
         Task<LevelResponseDto> CreateLevelAsync(LevelCreateDto dto);
-        Task<LevelResponseDto> UpdateLevelAsync(LevelUpdateDto dto);
+        Task<LevelResponseDto> UpdateLevelAsync(int id,LevelCreateDto dto);
+
         Task<bool> DeleteLevelAsync(int id);
 
         Task<List<UserLevelResponseDto>> GetUsersByLevelAsync(int levelId, string? textSearch);

@@ -12,11 +12,21 @@ namespace Project.Application.Common
         public T? Data { get; set; }
         public string? Message { get; set; }
 
-        public static ApiResponse<T> Ok(T data)
-            => new() { Success = true, Data = data };
+        public static ApiResponse<T> Ok(T data, string? message = null)
+            => new()
+            {
+                Success = true,
+                Data = data,
+                Message = message
+            };
 
         public static ApiResponse<T> Fail(string message)
-            => new() { Success = false, Message = message };
+            => new()
+            {
+                Success = false,
+                Message = message
+            };
     }
+
 
 }
