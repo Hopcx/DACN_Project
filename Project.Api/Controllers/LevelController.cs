@@ -37,24 +37,7 @@ namespace Project.Api.Controllers
         }
 
 
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateLevelAsync(int id, LevelUpdateDto dto)
-        {
-            // Kiểm tra ID từ URL và DTO có khớp không
-            if (id != dto.Id)
-            {
-                return BadRequest(ApiResponse<string>.Fail("ID không khớp."));
-            }
-
-            var result = await _service.UpdateLevelAsync(dto);
-
-            if (result == null)
-            {
-                return NotFound(ApiResponse<string>.Fail("Level không tồn tại hoặc cập nhật thất bại."));
-            }
-
-            return Ok(ApiResponse<LevelResponseDto>.Ok(result));
-        }
+        
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteLevelAsync(int id)
@@ -69,7 +52,7 @@ namespace Project.Api.Controllers
             return Ok(ApiResponse<string>.Ok($"Xóa Level với ID {id} thành công."));
         }
 
-        [HttpGet("{levelId}/users")]
+        [HttpGet("{levelId}")]
         public async Task<IActionResult> GetUsersByLevelAsync(int levelId, [FromQuery] string? search)
         {
             var users = await _service.GetUsersByLevelAsync(levelId, search);
@@ -81,6 +64,19 @@ namespace Project.Api.Controllers
 
             return Ok(ApiResponse<List<UserLevelResponseDto>>.Ok(users));
         }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateLevelAsync(int id, LevelCreateDto dto)
+        {
+            var result = await _service.UpdateLevelAsync(id, dto);
+
+            if (result == null)
+                return BadRequest(ApiResponse<string>.Fail("Cập nhật Level thất bại."));
+
+            return Ok(ApiResponse<LevelResponseDto>.Ok(result, "Cập nhật Level thành công."));
+
+        }
+
     }
 
 }

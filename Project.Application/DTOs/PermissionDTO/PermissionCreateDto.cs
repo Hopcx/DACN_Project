@@ -4,13 +4,12 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Project.Application.DTOs.LevelDTO
+namespace Project.Application.DTOs.PermissionDTO
 {
-    public class LevelUpdateDto
+    public class PermissionCreateDto
     {
-        public int Id { get; set; } 
         public string Name { get; set; } = null!;
         public byte? Status { get; set; }
+        public string? Description { get; set; }
     }
-
 }
