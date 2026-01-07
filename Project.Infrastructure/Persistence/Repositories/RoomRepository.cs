@@ -41,22 +41,23 @@ namespace Project.Infrastructure.Persistence.Repositories
             }
         }
 
-        public async Task<Room> UpdateRoomAsync(Room r)
+        public async Task<Room> UpdateRoomAsync(int id, Room r)
         {
             try
             {
-                var updateRoom = _context.Rooms.Find(r.Id);
+                var roomUpdate = await _context.Rooms.FindAsync(id);
+                if (roomUpdate == null)
+                    return null;
 
-                updateRoom.Name = r.Name;
-                updateRoom.Status = r.Status;
-                updateRoom.Capacity = r.Capacity;
-                var objRoom = _context.Rooms.Update(updateRoom).Entity;
+                roomUpdate.Name = r.Name;
+                roomUpdate.Status = r.Status;
+                roomUpdate.Capacity = r.Capacity;
+                roomUpdate.Address = r.Address;
                 await _context.SaveChangesAsync();
-                return objRoom;
+                return roomUpdate;
             }
             catch (Exception)
             {
-
                 return null;
             }
         }
@@ -65,11 +66,11 @@ namespace Project.Infrastructure.Persistence.Repositories
         {
             try
             {
-                var deleteRoom = _context.Rooms.Find(id);
+                var deleteRoom = await _context.Rooms.FindAsync(id);
 
-                var objRoom = _context.Rooms.Remove(deleteRoom).Entity;
+                _context.Rooms.Remove(deleteRoom);
                 await _context.SaveChangesAsync();
-                return objRoom;
+                return deleteRoom;
             }
             catch (Exception)
             {

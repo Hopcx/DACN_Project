@@ -28,5 +28,28 @@ namespace Project.Api.Controllers
             var result = await _service.CreateRoomAsync(dto);
             return Created("", ApiResponse<RoomResponseDto>.Ok(result));
         }
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteRoomAsync(int id)
+        {
+            var isDeleted = await _service.DeleteRoomAsync(id);
+
+            if (!isDeleted)
+            {
+                return NotFound(ApiResponse<string>.Fail("Room không tồn tại hoặc xóa thất bại."));
+            }
+
+            return Ok(ApiResponse<string>.Ok($"Xóa Room với ID {id} thành công."));
+        }
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateRoomAsync(int id, RoomCreateDto dto)
+        {
+            var result = await _service.UpdateRoomAsync(id, dto);
+
+            if (result == null)
+                return BadRequest(ApiResponse<string>.Fail("Cập nhật Level thất bại."));
+
+            return Ok(ApiResponse<RoomResponseDto>.Ok(result, "Cập nhật Level thành công."));
+
+        }
     }
 }

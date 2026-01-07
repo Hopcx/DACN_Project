@@ -39,25 +39,7 @@ namespace Project.Infrastructure.Persistence.Repositories
                 return null;
             }
         }
-        public async Task<Level> UpdateLevelAsync(Level level)
-        {
-            try
-            {
-                var objUpdateLevel = await _context.Levels.FindAsync(level.Id);
-
-                objUpdateLevel.Name = level.Name;
-                objUpdateLevel.Status = level.Status;
-
-
-                var updateLevel = _context.Levels.Update(objUpdateLevel).Entity;
-                await _context.SaveChangesAsync();
-                return updateLevel;
-            }
-            catch
-            {
-                return null;
-            }
-        }
+        
         public async Task<Level> DeleteLevelAsync(int id)
         {
             try
@@ -68,7 +50,7 @@ namespace Project.Infrastructure.Persistence.Repositories
                 await _context.SaveChangesAsync();
                 return objDeleteLevel;
             }
-            catch
+            catch (Exception)
             {
                 return null;
             }
@@ -95,6 +77,26 @@ namespace Project.Infrastructure.Persistence.Repositories
 
             return await query.Where(x => x.Status == 1).ToListAsync();
         }
+
+        public async Task<Level> UpdateLevelAsync(int id, Level r)
+        {
+            try
+            {
+                var levelUpdate = await _context.Levels.FindAsync(id);
+                if (levelUpdate == null)
+                    return null;
+
+                levelUpdate.Name = r.Name;
+                levelUpdate.Status = r.Status;
+                await _context.SaveChangesAsync();
+                return levelUpdate;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
     }
 
 }
