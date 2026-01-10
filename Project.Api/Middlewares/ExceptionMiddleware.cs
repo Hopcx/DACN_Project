@@ -17,12 +17,12 @@ namespace Project.Api.Middlewares
             {
                 await _next(context);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 context.Response.StatusCode = 500;
                 context.Response.ContentType = "application/json";
 
-                var response = ApiResponse<string>.Fail("Internal server error");
+                var response = ApiResponse<string>.Fail($"Internal server error - {ex.Message}");
                 await context.Response.WriteAsJsonAsync(response);
             }
         }
