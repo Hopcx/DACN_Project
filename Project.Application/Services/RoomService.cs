@@ -1,4 +1,5 @@
-﻿using Project.Application.DTOs.LevelDTO;
+﻿using Project.Application.DTOs;
+using Project.Application.DTOs.LevelDTO;
 using Project.Application.DTOs.RoomDTO;
 using Project.Application.Interfaces.Services;
 using Project.Domain.Entities;
@@ -56,16 +57,66 @@ namespace Project.Application.Services
 
         public async Task<List<RoomResponseDto>> GetAllRoomAsync()
         {
-            var rooms = await _repository.GetAllRoomAsync();
+            //var rooms = await _repository.GetAllRoomAsync();
 
-            return rooms.Select(r => new RoomResponseDto
+            //return rooms.Select(r => new RoomResponseDto
+            //{
+            //    Id = r.Id,
+            //    Name = r.Name,
+            //    Capacity = r.Capacity,
+            //    Address = r.Address,
+            //    Status = r.Status
+            //}).ToList();
+            return null;
+        }
+
+        public async Task<RoomResponseDto?> GetRoomByIdAsync(int id)
+        {
+            // (Optional) validate input
+            if (id <= 0)
+                return null;
+
+            var room = await _repository.GetRoomByIdAsync(id);
+
+            if (room == null)
+                return null;
+
+            return new RoomResponseDto
             {
-                Id = r.Id,
-                Name = r.Name,
-                Capacity = r.Capacity,
-                Address = r.Address,
-                Status = r.Status
-            }).ToList();
+                Id = room.Id,
+                Name = room.Name,
+                Capacity = room.Capacity,
+                Address = room.Address,
+                Status = room.Status
+            };
+        }
+
+
+        public async Task<PagedResult<RoomResponseDto>> GetRoomsAsync(RoomQueryDto query)
+        {
+            var (rooms, totalCount) = await _repository.GetRoomsAsync(
+                query.Name,
+                query.Status,
+                query.MinCapacity,
+                query.MaxCapacity,
+                query.Page,
+                query.PageSize
+            );
+
+            return new PagedResult<RoomResponseDto>
+            {
+                Items = rooms.Select(r => new RoomResponseDto
+                {
+                    Id = r.Id,
+                    Name = r.Name,
+                    Capacity = r.Capacity,
+                    Address = r.Address,
+                    Status = r.Status
+                }).ToList(),
+                TotalCount = totalCount,
+                Page = query.Page,
+                PageSize = query.PageSize
+            };
         }
 
         public async Task<RoomResponseDto> UpdateRoomAsync(int id, RoomCreateDto dto)

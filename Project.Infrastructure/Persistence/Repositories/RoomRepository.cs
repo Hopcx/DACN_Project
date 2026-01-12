@@ -78,5 +78,31 @@ namespace Project.Infrastructure.Persistence.Repositories
                 return null;
             }
         }
+
+        public async Task<(List<Room> Rooms, int TotalCount)> GetRoomsAsync(string? name, bool? status, int? minCapacity, int? maxCapacity, int page, int pageSize)
+        {
+            var query = _context.Rooms.AsQueryable();
+
+            if (!string.IsNullOrEmpty(name))
+                query = query.Where(r => r.Name.Contains(name));
+
+            if (status.HasValue)
+                query = query.Where(r => r.Status == status);
+
+            if (minCapacity.HasValue)
+                query = query.Where(r => r.Capacity >= minCapacity);
+
+            if (maxCapacity.HasValue)
+                query = query.Where(r => r.Capacity <= maxCapacity);
+
+            var totalCount = await query.CountAsync();
+
+            var rooms = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return (rooms, totalCount);
+        }
     }
 }
