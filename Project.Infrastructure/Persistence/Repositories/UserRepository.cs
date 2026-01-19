@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using BCrypt.Net;
 
 namespace Project.Infrastructure.Persistence.Repositories
 {
@@ -89,27 +90,23 @@ namespace Project.Infrastructure.Persistence.Repositories
             return await _context.Users.FindAsync(id);
         }
 
-        public async Task<User> GetByKeyAndPasswordAsync(string keyword, string hashPassword)
+        public async Task<User> GetByKeyAndPasswordAsync(string keyword, string plainPassword)
         {
             User avaiableUser = await _context.Users.FirstOrDefaultAsync(x => x.UserName == keyword || x.Email == keyword || x.PhoneNumber == keyword);
             if (avaiableUser == null)
             {
                 return null;
             }
-            else
-            {
-                if (avaiableUser.PasswordHash.ToUpper() == hashPassword.ToUpper())
-                {
-                    return avaiableUser;
-                }
 
-                else
-                {
-                    ///wrong password
-                    avaiableUser.PasswordHash = "-1";
-                    return avaiableUser;
-                }
+            // Verify password using BCrypt
+            bool isPasswordValid = BCrypt.Net.BCrypt.Verify(plainPassword, avaiableUser.PasswordHash);
+            if (!isPasswordValid)
+            {
+                // Return null to indicate wrong password
+                return null;
             }
+
+            return avaiableUser;
         }
 
         public async Task<List<User>> GetUsersByLevelIdAsync(int levelId)

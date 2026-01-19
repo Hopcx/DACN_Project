@@ -26,21 +26,31 @@ namespace Project.Api.Controllers
         [HttpDelete("delete-user-{id}")]
         public async Task<IActionResult> DeleteUsserAsync(string id)
         {
-            var isDeleted = await _userService.DeleteUsserAsync(id);
+            // ===== CÁCH CŨ: Manual check và return (đã comment) =====
+            //var isDeleted = await _userService.DeleteUsserAsync(id);
+            //if (!isDeleted)
+            //{
+            //    return NotFound(ApiResponse<string>.Fail("User không tồn tại hoặc xóa thất bại."));
+            //}
+            //return Ok(ApiResponse<string>.Ok(null, $"Xóa User với ID {id} thành công."));
 
-            if (!isDeleted)
-            {
-                return NotFound(ApiResponse<string>.Fail("User không tồn tại hoặc xóa thất bại."));
-            }
-
+            // ===== CÁCH MỚI: Service throw exception, middleware xử lý =====
+            await _userService.DeleteUsserAsync(id);
             return Ok(ApiResponse<string>.Ok(null, $"Xóa User với ID {id} thành công."));
-
         }
 
         [HttpPost("create-user")]
-        public async Task<IActionResult> CreateRoomAsync(UserCreateDto dto)
+        public async Task<IActionResult> CreateUserAsync(UserCreateDto dto)
         {
-            var result = await _userService.CreateRoomAsync(dto);
+            // ===== CÁCH CŨ: Manual check và return (đã comment) =====
+            //var result = await _userService.CreateUserAsync(dto);
+            //if (result == null)
+            //    return BadRequest(ApiResponse<string>.Fail("Tạo User thất bại"));
+            //return Created("", ApiResponse<UserResponseDto>.Ok(result));
+
+            // ===== CÁCH MỚI: FluentValidation tự động validate, service throw exception nếu fail =====
+            // FluentValidation sẽ tự động validate dto trước khi vào method này
+            var result = await _userService.CreateUserAsync(dto);
             return Created("", ApiResponse<UserResponseDto>.Ok(result));
         }
     }
