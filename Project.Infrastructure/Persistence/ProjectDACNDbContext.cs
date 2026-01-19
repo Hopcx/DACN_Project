@@ -71,9 +71,13 @@ namespace Project.Infrastructure.Persistence
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-
-            optionsBuilder.UseSqlServer(@"Server=LAPTOP-CXH2410\SQLEXPRESS;Database=ProjectDACN;Trusted_Connection=True;TrustServerCertificate=True;");//developer 
-
+            // Connection string is configured via DependencyInjection in Infrastructure layer
+            // Only configure here if not already configured (for design-time tools)
+            if (!optionsBuilder.IsConfigured)
+            {
+                // This should not be used in runtime - connection string should come from appsettings.json
+                // Only kept for EF Core design-time tools (migrations, etc.)
+            }
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

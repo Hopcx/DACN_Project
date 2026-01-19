@@ -51,12 +51,12 @@ namespace Project.Domain.Interfaces.Repositories
         Task<User> DeleteUserAsync(Guid id);
 
         /// <summary>
-        /// Lấy người dùng theo từ khóa và mật khẩu đã mã hóa.
+        /// Lấy người dùng theo từ khóa và mật khẩu (plain text - sẽ được verify bằng BCrypt).
         /// </summary>
         /// <param name="keyword">Email, username hoặc số điện thoại.</param>
-        /// <param name="hashPassword">Mật khẩu đã mã hóa.</param>
-        /// <returns>Người dùng phù hợp.</returns>
-        Task<User> GetByKeyAndPasswordAsync(string keyword, string hashPassword);
+        /// <param name="plainPassword">Mật khẩu plain text.</param>
+        /// <returns>Người dùng phù hợp nếu password đúng, null nếu sai.</returns>
+        Task<User> GetByKeyAndPasswordAsync(string keyword, string plainPassword);
 
         /// <summary>
         /// Tìm người dùng đã tồn tại theo từ khóa.
