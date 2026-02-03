@@ -7,15 +7,18 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using BCrypt.Net;
+using Project.Domain.Interfaces.ADO;
 
 namespace Project.Infrastructure.Persistence.Repositories
 {
     public class UserRepository : IUserRepository
     {
         private readonly ProjectDACNDbContext _context;
-        public UserRepository(ProjectDACNDbContext context)
+        private readonly IADO _aDO;
+        public UserRepository(ProjectDACNDbContext context, IADO aDO)
         {
             _context = context; 
+            _aDO = aDO;
         }
         public async Task<User> AddUserAsync(User user)
         {

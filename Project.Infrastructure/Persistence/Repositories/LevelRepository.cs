@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Project.Domain.Entities;
+using Project.Domain.Interfaces.ADO;
 using Project.Domain.Interfaces.Repositories;
 using System;
 using System.Collections.Generic;
@@ -12,10 +13,12 @@ namespace Project.Infrastructure.Persistence.Repositories
     public class LevelRepository : ILevelRepository
     {
         private readonly ProjectDACNDbContext _context;
+        private readonly IADO _aDO;
 
-        public LevelRepository(ProjectDACNDbContext context)
+        public LevelRepository(ProjectDACNDbContext context, IADO aDO)
         {
             _context = context;
+            _aDO = aDO;
         }
 
         public async Task<List<Level>> GetAllLevelAsync()

@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Project.Domain.Interfaces.ADO;
 using Project.Domain.Interfaces.Repositories;
 using Project.Infrastructure.Persistence;
 using Project.Infrastructure.Persistence.Repositories;
@@ -21,6 +22,7 @@ namespace Project.Infrastructure
             {
                 options.UseSqlServer(configuration.GetConnectionString("Default"));
             });
+            services.AddScoped<IADO, ProjectHopADO>();
             services.AddScoped<ILevelRepository, LevelRepository>();
             services.AddScoped<IRoomRepository, RoomRepository>();
             services.AddScoped<IPermissionRepository, PermissionRepository>();
