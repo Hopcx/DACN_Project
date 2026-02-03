@@ -18,7 +18,7 @@ namespace Project.Domain.Interfaces.Repositories
         public ProjectHopADO(IConfiguration configuration)
         {
             configuration = configuration;
-            connectionString = _configuration.GetConnectionString("dbcontext") + "";
+            connectionString = _configuration.GetConnectionString("Default") + "";
         }
 
         public DataTable dataTable(string sql)

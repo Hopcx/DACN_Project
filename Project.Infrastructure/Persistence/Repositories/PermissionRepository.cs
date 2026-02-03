@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Project.Domain.Entities;
+using Project.Domain.Interfaces.ADO;
 using Project.Domain.Interfaces.Repositories;
 using System;
 using System.Collections.Generic;
@@ -12,9 +13,11 @@ namespace Project.Infrastructure.Persistence.Repositories
     public class PermissionRepository : IPermissionRepository
     {
         private readonly ProjectDACNDbContext _context;
-        public PermissionRepository(ProjectDACNDbContext context)
+        private readonly IADO _aDO;
+        public PermissionRepository(ProjectDACNDbContext context , IADO aDO)
         {
             _context = context;
+            _aDO = aDO;
         }
         public async Task<Permission> CreatePermissionAsync(Permission permission)
         {
