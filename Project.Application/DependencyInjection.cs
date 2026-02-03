@@ -10,6 +10,7 @@ using Project.Domain.Interfaces.Repositories;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using System.Reflection;
+using Project.Domain.Interfaces.ADO;
 // ===== CÁCH CŨ: Có thể gây conflict (đã comment) =====
 //using AutoMapper;
 
