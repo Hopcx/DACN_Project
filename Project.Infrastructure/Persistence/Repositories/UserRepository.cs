@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Project.Domain.Entities;
 using Project.Domain.Interfaces.Repositories;
 using System;
@@ -95,7 +95,14 @@ namespace Project.Infrastructure.Persistence.Repositories
 
         public async Task<User> GetByKeyAndPasswordAsync(string keyword, string plainPassword)
         {
-            User avaiableUser = await _context.Users.FirstOrDefaultAsync(x => x.UserName == keyword || x.Email == keyword || x.PhoneNumber == keyword);
+            // Include Level + UserPermissions để sau khi login có thể sinh token + claim đầy đủ
+            User avaiableUser = await _context.Users
+                .Include(u => u.Level)
+                .Include(u => u.UserPermissions)
+                .FirstOrDefaultAsync(x =>
+                    x.UserName == keyword
+                    || x.Email == keyword
+                    || x.PhoneNumber == keyword);
             if (avaiableUser == null)
             {
                 return null;

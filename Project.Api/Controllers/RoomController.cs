@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Project.Application.Common;
 using Project.Application.DTOs;
 using Project.Application.DTOs.LevelDTO;
@@ -9,6 +10,9 @@ namespace Project.Api.Controllers
 {
     [ApiController]
     [Route("web/rooms")]
+    // Ví dụ gắn Policy cho controller:
+    // - Chỉ user có PermissionId = 4 ("Quản lý lịch thi") mới được thao tác phòng thi
+    [Authorize(Policy = "ScheduleManagement")]
     public class RoomController : ControllerBase
     {
         private readonly IRoomService _service;
