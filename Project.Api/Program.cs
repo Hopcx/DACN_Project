@@ -10,6 +10,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Serilog;
 using Serilog.Events;
+using Project.Api.Extensions;
 
 namespace Project.Api
 {
@@ -79,7 +80,17 @@ namespace Project.Api
                     };
                 });
 
-                builder.Services.AddAuthorization();
+                // Đăng ký Authorization theo Policy-based:
+                // - Mỗi PermissionId sẽ map sang 1 Policy
+                // - Khi gắn [Authorize(Policy = "ExamManagement")] framework sẽ tự kiểm tra claim "permission"
+                // Tách cấu hình Authorization (policy-based) ra file Extension:
+                // - Xem chi tiết tại: Project.Api/Extensions/AuthorizationExtensions.cs
+                // - Tại đây chỉ cần gọi 1 dòng cho gọn Program.cs
+                builder.Services.AddProjectAuthorization();
+
+                // Đăng ký HttpContextAccessor + CurrentUserService để có hàm chung đọc thông tin user hiện tại
+                builder.Services.AddHttpContextAccessor();
+                builder.Services.AddScoped<Project.Application.Common.ICurrentUserService, Project.Api.Services.CurrentUserService>();
 
                 builder.Services.AddEndpointsApiExplorer();
                 builder.Services.AddSwaggerGen(c =>

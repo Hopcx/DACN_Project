@@ -11,7 +11,20 @@ namespace Project.Application.Services
     /// </summary>
     public interface IJwtService
     {
-        string GenerateToken(Guid userId, string userName, int levelId);
+        /// <summary>
+        /// Tạo AccessToken chứa đầy đủ thông tin user:
+        /// - Id
+        /// - UserName
+        /// - LevelId
+        /// - Danh sách PermissionId
+        /// </summary>
+        /// <param name="userId">Id của user</param>
+        /// <param name="userName">UserName hiển thị</param>
+        /// <param name="levelId">LevelId (Admin, Examiner, Teacher, Student)</param>
+        /// <param name="permissionIds">Danh sách PermissionId được gán cho user</param>
+        /// <returns>Chuỗi JWT Access Token</returns>
+        string GenerateToken(Guid userId, string userName, int levelId, IEnumerable<int> permissionIds);
+
         ClaimsPrincipal? ValidateToken(string token);
     }
 
@@ -24,7 +37,15 @@ namespace Project.Application.Services
             _configuration = configuration;
         }
 
-        public string GenerateToken(Guid userId, string userName, int levelId)
+        /// <summary>
+        /// Sinh AccessToken JWT:
+        /// - Thời gian sống: JwtSettings:ExpiryMinutes
+        /// - Claim chuẩn: sub, unique_name, jti
+        /// - Claim custom:
+        ///     + level_id     : LevelId của user
+        ///     + permission   : lặp lại cho từng PermissionId (policy-based Authorization sẽ đọc claim này)
+        /// </summary>
+        public string GenerateToken(Guid userId, string userName, int levelId, IEnumerable<int> permissionIds)
         {
             var jwtSettings = _configuration.GetSection("JwtSettings");
             var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey is not configured");
@@ -35,13 +56,31 @@ namespace Project.Application.Services
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
-            var claims = new[]
+            // Các claim cơ bản của user
+            var claims = new List<Claim>
             {
+                // Id user
                 new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
+
+                // Tên hiển thị
                 new Claim(JwtRegisteredClaimNames.UniqueName, userName),
-                new Claim("levelId", levelId.ToString()),
+
+                // LevelId dùng để phân quyền theo Level (Admin / Examiner / Teacher / Student)
+                new Claim("level_id", levelId.ToString()),
+
+                // Mã duy nhất của token
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
+
+            // Thêm claim PermissionId: mỗi permission tạo 1 claim "permission" riêng
+            // Ví dụ: permission = 1 -> "Quản lý bài thi"
+            if (permissionIds != null)
+            {
+                foreach (var permissionId in permissionIds.Distinct())
+                {
+                    claims.Add(new Claim("permission", permissionId.ToString()));
+                }
+            }
 
             var token = new JwtSecurityToken(
                 issuer: issuer,
