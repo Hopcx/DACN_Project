@@ -51,7 +51,7 @@ namespace Project.Api.Controllers
             // ===== CÁCH MỚI: FluentValidation tự động validate, service throw exception nếu fail =====
             // FluentValidation sẽ tự động validate dto trước khi vào method này
             var result = await _userService.CreateUserAsync(dto);
-            return Created("", ApiResponse<UserResponseDto>.Ok(result));
+            return Created("", ApiResponse<UserResponseDto>.Ok(result, "Create user succesfully"));
         }
     }
 }
