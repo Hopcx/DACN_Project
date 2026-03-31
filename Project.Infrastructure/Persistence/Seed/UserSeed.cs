@@ -15,7 +15,7 @@ namespace Project.Infrastructure.Persistence.Seed
             modelBuilder.Entity<User>().HasData(
                 new User
                 {
-                    Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                    Id = Guid.Parse("11111111-1111-1111-1111-111111111112"),
                     FullName = "Nguyen Van A",
                     UserName = "nva",
                     Email = "abcde@gmail.com",
