@@ -18,6 +18,6 @@ namespace Project.Domain.Entities
 
         public byte? Status { get; set; }
 
-        public virtual ICollection<UserPermission> UserPermissions { get; set; } = new List<UserPermission>();
+        //public virtual ICollection<UserPermission> UserPermissions { get; set; } = new List<UserPermission>();
     }
 }
