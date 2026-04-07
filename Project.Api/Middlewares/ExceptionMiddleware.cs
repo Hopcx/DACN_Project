@@ -70,7 +70,8 @@ namespace Project.Api.Middlewares
                     break;
             }
 
-            var result = JsonSerializer.Serialize(responseModel);
+            var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+            var result = JsonSerializer.Serialize(responseModel, options);
             await response.WriteAsync(result);
         }
 
