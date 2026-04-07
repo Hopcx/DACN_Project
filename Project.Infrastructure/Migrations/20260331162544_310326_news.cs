@@ -14,7 +14,7 @@ namespace Project.Infrastructure.Migrations
             migrationBuilder.DeleteData(
                 table: "Users",
                 keyColumn: "Id",
-                keyValue: new Guid("11111111-1111-1111-1111-111111111111"));
+                keyValue: new Guid("11111111-1111-1111-1111-111111111114"));
 
             migrationBuilder.InsertData(
                 table: "Users",

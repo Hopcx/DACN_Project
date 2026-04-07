@@ -145,7 +145,7 @@ namespace Project.Api
                 // ===== CÁCH MỚI: Exception middleware với custom exception và logging =====
                 app.UseMiddleware<ExceptionMiddleware>();
                 app.UseHttpsRedirection();
-
+                app.UseRouting();
                 // Middleware xác thực và phân quyền
                 app.UseAuthentication();
                 app.UseAuthorization();
