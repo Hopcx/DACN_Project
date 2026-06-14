@@ -27,6 +27,16 @@ namespace Project.Application
             services.AddScoped<IPermissionService, PermissionService>();
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IJwtService, JwtService>();
+            services.AddScoped<IAnswerService, AnswerService>();
+            services.AddScoped<ISubjectService, SubjectService>();
+            services.AddScoped<IQuestionTypeService, QuestionTypeService>();
+            services.AddScoped<IQuestionLevelService, QuestionLevelService>();
+            services.AddScoped<IExamScheduleService, ExamScheduleService>();
+            services.AddScoped<IAnswerSubmissionService, AnswerSubmissionService>();
+            services.AddScoped<IClassService, ClassService>();
+            services.AddScoped<IExamService, ExamService>();
+            services.AddScoped<IQuestionService, QuestionService>();
+            services.AddScoped<ISubmissionService, SubmissionService>();
 
             // Register FluentValidation
             services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
