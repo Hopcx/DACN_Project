@@ -27,6 +27,23 @@ namespace Project.Infrastructure
             services.AddScoped<IRoomRepository, RoomRepository>();
             services.AddScoped<IPermissionRepository, PermissionRepository>();
             services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<IAnswerRepository, AnswerRepository>();
+            services.AddScoped<ISubjectRepository, SubjectRepository>();
+            services.AddScoped<IQuestionTypeRepository, QuestionTypeRepository>();
+            services.AddScoped<IQuestionLevelRepository, QuestionLevelRepository>();
+            services.AddScoped<IExamScheduleRepository, ExamScheduleRepository>();
+            services.AddScoped<IAnswerSubmissionRepository, AnswerSubmissionRepository>();
+            services.AddScoped<IClassRepository, ClassRepository>();
+            services.AddScoped<IClassExamScheduleRepository, ClassExamScheduleRepository>();
+            services.AddScoped<IClassUserRepository, ClassUserRepository>();
+            services.AddScoped<IExamRepository, ExamRepository>();
+            services.AddScoped<IExamDetailRepository, ExamDetailRepository>();
+            services.AddScoped<IExamDetailQuestionRepository, ExamDetailQuestionRepository>();
+            services.AddScoped<IExamActivityLogRepository, ExamActivityLogRepository>();
+            services.AddScoped<IQuestionRepository, QuestionRepository>();
+            services.AddScoped<ISubmissionRepository, SubmissionRepository>();
+            services.AddScoped<ILogRepository, LogRepository>();
+            services.AddScoped<IUserPermissionRepository, UserPermissionRepository>();
             return services;
         }
     }
