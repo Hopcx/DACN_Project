@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Project.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class _121625first : Migration
+    public partial class _2806_updaetmơi11 : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -301,17 +301,11 @@ namespace Project.Infrastructure.Migrations
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     UserId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    PermissionId = table.Column<int>(type: "int", nullable: false),
-                    LogId = table.Column<int>(type: "int", nullable: true)
+                    PermissionId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_UserPermissions", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_UserPermissions_Logs_LogId",
-                        column: x => x.LogId,
-                        principalTable: "Logs",
-                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_UserPermissions_Permissions_PermissionId",
                         column: x => x.PermissionId,
@@ -348,7 +342,8 @@ namespace Project.Infrastructure.Migrations
                         name: "FK_Answers_Questions_QuestionId",
                         column: x => x.QuestionId,
                         principalTable: "Questions",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -598,7 +593,7 @@ namespace Project.Infrastructure.Migrations
                         column: x => x.UserId,
                         principalTable: "Users",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -674,13 +669,7 @@ namespace Project.Infrastructure.Migrations
             migrationBuilder.InsertData(
                 table: "Users",
                 columns: new[] { "Id", "Address", "AvatarUrl", "DateOfBirth", "Email", "FullName", "LastLogin", "LevelId", "PasswordHash", "PhoneNumber", "Sex", "Status", "UserName" },
-                values: new object[,]
-                {
-                    { new Guid("1c56d7c7-08c6-457b-9e0f-bb32988293a5"), "A", null, new DateTime(2025, 12, 16, 20, 53, 43, 406, DateTimeKind.Local).AddTicks(7166), "absscde@gmail.com", "Nguyen Van D", null, 1, "4297f44b13955235245b2497399d7a93", "0287654322", true, (byte)1, "nvd" },
-                    { new Guid("2e07e776-5252-4388-a12b-8a2c527a4c4f"), "A", null, new DateTime(2025, 12, 16, 20, 53, 43, 406, DateTimeKind.Local).AddTicks(7163), "aabscde@gmail.com", "Nguyen Van C", null, 2, "4297f44b13955235245b2497399d7a93", "0987254322", true, (byte)1, "nvc" },
-                    { new Guid("b2f380e9-23c5-427c-ad6e-a417b0d1d1ed"), "A", null, new DateTime(2025, 12, 16, 20, 53, 43, 406, DateTimeKind.Local).AddTicks(7160), "abscde@gmail.com", "Nguyen Van B", null, 3, "4297f44b13955235245b2497399d7a93", "0987654322", true, (byte)1, "nvb" },
-                    { new Guid("beedfc1e-05ee-4d5f-b01e-3bcceb1de36e"), "A", null, new DateTime(2025, 12, 16, 20, 53, 43, 406, DateTimeKind.Local).AddTicks(7138), "abcde@gmail.com", "Nguyen Van A", null, 4, "4297f44b13955235245b2497399d7a93", "0987654321", false, (byte)1, "nva" }
-                });
+                values: new object[] { new Guid("11111111-1111-1111-1111-111111111112"), "A", null, new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "abcde@gmail.com", "Nguyen Van A", null, 4, "4297f44b13955235245b2497399d7a93", "0987654321", false, (byte)1, "nva" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Answers_QuestionId",
@@ -824,11 +813,6 @@ namespace Project.Infrastructure.Migrations
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_UserPermissions_LogId",
-                table: "UserPermissions",
-                column: "LogId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_UserPermissions_PermissionId",
                 table: "UserPermissions",
                 column: "PermissionId");
@@ -884,6 +868,9 @@ namespace Project.Infrastructure.Migrations
                 name: "ExamDetailQuestions");
 
             migrationBuilder.DropTable(
+                name: "Logs");
+
+            migrationBuilder.DropTable(
                 name: "QuestionAnswers");
 
             migrationBuilder.DropTable(
@@ -900,9 +887,6 @@ namespace Project.Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "Answers");
-
-            migrationBuilder.DropTable(
-                name: "Logs");
 
             migrationBuilder.DropTable(
                 name: "Permissions");
