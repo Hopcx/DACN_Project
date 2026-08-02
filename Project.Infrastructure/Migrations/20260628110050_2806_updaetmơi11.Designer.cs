@@ -12,8 +12,8 @@ using Project.Infrastructure.Persistence;
 namespace Project.Infrastructure.Migrations
 {
     [DbContext(typeof(ProjectDACNDbContext))]
-    [Migration("20260331162544_310326_news")]
-    partial class _310326_news
+    [Migration("20260628110050_2806_updaetmơi11")]
+    partial class _2806_updaetmơi11
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -973,9 +973,6 @@ namespace Project.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("LogId")
-                        .HasColumnType("int");
-
                     b.Property<int>("PermissionId")
                         .HasColumnType("int");
 
@@ -983,8 +980,6 @@ namespace Project.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("LogId");
 
                     b.HasIndex("PermissionId");
 
@@ -1245,10 +1240,6 @@ namespace Project.Infrastructure.Migrations
 
             modelBuilder.Entity("Project.Domain.Entities.UserPermission", b =>
                 {
-                    b.HasOne("Project.Domain.Entities.Log", null)
-                        .WithMany("UserPermissions")
-                        .HasForeignKey("LogId");
-
                     b.HasOne("Project.Domain.Entities.Permission", "Permission")
                         .WithMany()
                         .HasForeignKey("PermissionId")
@@ -1308,11 +1299,6 @@ namespace Project.Infrastructure.Migrations
             modelBuilder.Entity("Project.Domain.Entities.Level", b =>
                 {
                     b.Navigation("Users");
-                });
-
-            modelBuilder.Entity("Project.Domain.Entities.Log", b =>
-                {
-                    b.Navigation("UserPermissions");
                 });
 
             modelBuilder.Entity("Project.Domain.Entities.Question", b =>
