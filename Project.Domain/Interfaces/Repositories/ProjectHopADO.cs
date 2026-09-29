@@ -17,7 +17,7 @@ namespace Project.Domain.Interfaces.Repositories
         private readonly IConfiguration _configuration;
         public ProjectHopADO(IConfiguration configuration)
         {
-            configuration = configuration;
+            _configuration = configuration;
             connectionString = _configuration.GetConnectionString("Default") + "";
         }
 
