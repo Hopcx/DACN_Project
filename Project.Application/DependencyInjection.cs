@@ -37,6 +37,13 @@ namespace Project.Application
             services.AddScoped<IExamService, ExamService>();
             services.AddScoped<IQuestionService, QuestionService>();
             services.AddScoped<ISubmissionService, SubmissionService>();
+            services.AddScoped<IClassExamScheduleService, ClassExamScheduleService>();
+            services.AddScoped<IClassUserService, ClassUserService>();
+            services.AddScoped<IExamActivityLogService, ExamActivityLogService>();
+            services.AddScoped<IExamDetailService, ExamDetailService>();
+            services.AddScoped<IExamDetailQuestionService, ExamDetailQuestionService>();
+            services.AddScoped<ILogService, LogService>();
+            services.AddScoped<IUserPermissionService, UserPermissionService>();
 
             // Register FluentValidation
             services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
