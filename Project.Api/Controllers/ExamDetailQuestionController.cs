@@ -7,6 +7,7 @@ namespace Project.Api.Controllers
 {
     [ApiController]
     [Route("web/exam-detail-questions")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = "ExamManagement")]
     public class ExamDetailQuestionController : ControllerBase
     {
         private readonly IExamDetailQuestionService _service;

@@ -7,6 +7,7 @@ namespace Project.Api.Controllers
 {
     [ApiController]
     [Route("web/class-exam-schedules")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = "ScheduleManagement")]
     public class ClassExamScheduleController : ControllerBase
     {
         private readonly IClassExamScheduleService _service;

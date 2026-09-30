@@ -7,6 +7,7 @@ namespace Project.Api.Controllers
 {
     [ApiController]
     [Route("web/answer-submissions")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminManagement")]
     public class AnswerSubmissionController : ControllerBase
     {
         private readonly IAnswerSubmissionService _service;
@@ -33,6 +34,8 @@ namespace Project.Api.Controllers
             return Ok(ApiResponse<AnswerSubmissionResponseDto>.Ok(result));
         }
 
+        // Write route is closed until server-owned finalization or audited correction exists.
+        [NonAction]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] AnswerSubmissionCreateDto dto)
         {
@@ -43,6 +46,8 @@ namespace Project.Api.Controllers
             return Created("", ApiResponse<AnswerSubmissionResponseDto>.Ok(result, "Tạo Answer submission thành công"));
         }
 
+        // Write route is closed until server-owned finalization or audited correction exists.
+        [NonAction]
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] AnswerSubmissionCreateDto dto)
         {
@@ -53,6 +58,8 @@ namespace Project.Api.Controllers
             return Ok(ApiResponse<AnswerSubmissionResponseDto>.Ok(result, "Cập nhật Answer submission thành công"));
         }
 
+        // Write route is closed until server-owned finalization or audited correction exists.
+        [NonAction]
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {

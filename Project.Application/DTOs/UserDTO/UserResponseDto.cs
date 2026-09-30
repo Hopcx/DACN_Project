@@ -22,8 +22,6 @@ namespace Project.Application.DTOs.UserDTO
 
         public string Email { get; set; } = null!;
 
-        public string PasswordHash { get; set; } = null!;
-
         public string? AvatarUrl { get; set; }
 
         public bool Sex { get; set; }

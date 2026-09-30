@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Project.Api.Extensions
 {
@@ -29,6 +30,11 @@ namespace Project.Api.Extensions
         {
             services.AddAuthorization(options =>
             {
+                options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                    .RequireAuthenticatedUser()
+                    .Build();
+                options.AddPolicy("AdminManagement", policy =>
+                    policy.RequireAuthenticatedUser().RequireClaim("level_id", "1"));
                 // 1: Quản lý bài thi
                 options.AddPolicy("ExamManagement", policy =>
                     policy.RequireClaim("permission", "1"));
@@ -50,4 +56,3 @@ namespace Project.Api.Extensions
         }
     }
 }
-

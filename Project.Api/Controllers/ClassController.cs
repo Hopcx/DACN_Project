@@ -7,6 +7,7 @@ namespace Project.Api.Controllers
 {
     [ApiController]
     [Route("web/classes")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminManagement")]
     public class ClassController : ControllerBase
     {
         private readonly IClassService _service;

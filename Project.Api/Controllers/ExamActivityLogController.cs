@@ -7,6 +7,7 @@ namespace Project.Api.Controllers
 {
     [ApiController]
     [Route("web/exam-activity-logs")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminManagement")]
     public class ExamActivityLogController : ControllerBase
     {
         private readonly IExamActivityLogService _service;

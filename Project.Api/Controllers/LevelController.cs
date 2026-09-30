@@ -8,6 +8,7 @@ namespace Project.Api.Controllers
 {
     [ApiController]
     [Route("web/levels")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminManagement")]
     public class LevelController : ControllerBase
     {
         private readonly ILevelService _service;
