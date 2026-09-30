@@ -34,6 +34,7 @@ namespace Project.Api.Controllers
         /// Login endpoint - nhận username/email/phone và password, trả về JWT token
         /// </summary>
         [HttpPost("login")]
+        [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
             var user = await _userRepository.GetByKeyAndPasswordAsync(dto.Keyword, dto.Password);
@@ -101,6 +102,7 @@ namespace Project.Api.Controllers
         /// - Nếu OK: sinh AccessToken + RefreshToken mới
         /// </summary>
         [HttpPost("refresh")]
+        [AllowAnonymous]
         public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
         {
             if (string.IsNullOrWhiteSpace(request.RefreshToken))

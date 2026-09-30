@@ -10,6 +10,7 @@ namespace Project.Api.Controllers
     
     [ApiController]
     [Route("web/answers")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = "QuestionManagement")]
     public class AnswerController : ControllerBase
     {
         private readonly IAnswerService _service;

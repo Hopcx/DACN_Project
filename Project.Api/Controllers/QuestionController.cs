@@ -7,6 +7,7 @@ namespace Project.Api.Controllers
 {
     [ApiController]
     [Route("web/questions")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = "QuestionManagement")]
     public class QuestionController : ControllerBase
     {
         private readonly IQuestionService _service;

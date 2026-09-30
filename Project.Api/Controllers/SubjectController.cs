@@ -7,6 +7,7 @@ namespace Project.Api.Controllers
 {
     [ApiController]
     [Route("web/subjects")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = "SubjectManagement")]
     public class SubjectController : ControllerBase
     {
         private readonly ISubjectService _service;

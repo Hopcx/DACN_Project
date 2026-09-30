@@ -7,6 +7,7 @@ namespace Project.Api.Controllers
 {
     [ApiController]
     [Route("web/question-levels")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = "QuestionManagement")]
     public class QuestionLevelController : ControllerBase
     {
         private readonly IQuestionLevelService _service;

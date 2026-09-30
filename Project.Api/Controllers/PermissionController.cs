@@ -9,6 +9,7 @@ namespace Project.Api.Controllers
 {
     [ApiController]
     [Route("web/permissions")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminManagement")]
     public class PermissionController : ControllerBase
     {
         private readonly IPermissionService _service;

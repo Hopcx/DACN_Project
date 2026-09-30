@@ -9,6 +9,7 @@ namespace Project.Api.Controllers
 {
     [ApiController]
     [Route("web/users")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminManagement")]
     public class UserController : ControllerBase
     {
         private readonly IUserService _userService;
