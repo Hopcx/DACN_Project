@@ -51,7 +51,7 @@ namespace Project.Application.Services
             var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey is not configured");
             var issuer = jwtSettings["Issuer"] ?? "ProjectDACN";
             var audience = jwtSettings["Audience"] ?? "ProjectDACN";
-            var expiryMinutes = int.Parse(jwtSettings["ExpiryMinutes"] ?? "60");
+            var expiryMinutes = Math.Clamp(int.Parse(jwtSettings["ExpiryMinutes"] ?? "15"), 1, 15);
 
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);

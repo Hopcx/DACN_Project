@@ -19,11 +19,13 @@ namespace Project.Domain.Entities
 
         public DateTime DateOfBirth { get; set; }
 
-        public string PhoneNumber { get; set; } = null!;
+        public string? PhoneNumber { get; set; }
 
         public string Address { get; set; } = null!;
 
         public string Email { get; set; } = null!;
+        public DateTime? EmailVerifiedAt { get; set; }
+        public DateTime? LastVerificationSentAt { get; set; }
 
         public string PasswordHash { get; set; } = null!;
 

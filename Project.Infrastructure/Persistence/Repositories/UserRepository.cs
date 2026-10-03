@@ -100,16 +100,19 @@ namespace Project.Infrastructure.Persistence.Repositories
                 .Include(u => u.Level)
                 .Include(u => u.UserPermissions)
                 .FirstOrDefaultAsync(x =>
-                    x.UserName == keyword
+                    x.Status == 1 && x.EmailVerifiedAt != null &&
+                    (x.UserName == keyword
                     || x.Email == keyword
-                    || x.PhoneNumber == keyword);
+                    || x.PhoneNumber == keyword));
             if (avaiableUser == null)
             {
                 return null;
             }
 
             // Verify password using BCrypt
-            bool isPasswordValid = BCrypt.Net.BCrypt.Verify(plainPassword, avaiableUser.PasswordHash);
+            bool isPasswordValid;
+            try { isPasswordValid = BCrypt.Net.BCrypt.Verify(plainPassword, avaiableUser.PasswordHash); }
+            catch (Exception) { isPasswordValid = false; } // Legacy hashes require a verified reset.
             if (!isPasswordValid)
             {
                 // Return null to indicate wrong password

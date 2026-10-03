@@ -11,6 +11,11 @@ using System.Text;
 using Serilog;
 using Serilog.Events;
 using Project.Api.Extensions;
+using Project.Api.Filters;
+using Project.Api.Services;
+using System.Threading.RateLimiting;
+using System.Security.Claims;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace Project.Api
 {
@@ -50,6 +55,28 @@ namespace Project.Api
                 // ===== CÁCH MỚI: Có FluentValidation và AutoMapper =====
                 builder.Services.AddApplication();
                 builder.Services.AddInfrastructure(builder.Configuration);
+                builder.Services.AddSingleton<IVerificationEmailSender, VerificationEmailSender>();
+                builder.Services.AddHostedService<ExpiredAccessTokenCleanupService>();
+                builder.Services.AddScoped<AuthCsrfFilter>();
+                builder.Services.AddAntiforgery(options =>
+                {
+                    options.HeaderName = "X-CSRF-TOKEN";
+                    options.Cookie.Name = "__Secure-dacn-csrf";
+                    options.Cookie.Path = "/web/auth";
+                    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+                    options.Cookie.SameSite = SameSiteMode.Lax;
+                    options.Cookie.HttpOnly = true;
+                });
+                builder.Services.AddRateLimiter(options =>
+                {
+                    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+                    options.AddPolicy("auth-public", context => RateLimitPartition.GetFixedWindowLimiter(
+                        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+                    options.AddPolicy("auth-session", context => RateLimitPartition.GetFixedWindowLimiter(
+                        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+                });
 
                 // ===== CÁCH CŨ: Không có JWT Authentication (đã comment) =====
                 //builder.Services.AddEndpointsApiExplorer();
@@ -77,6 +104,23 @@ namespace Project.Api
                         ValidAudience = jwtSettings["Audience"],
                         ValidateLifetime = true,
                         ClockSkew = TimeSpan.Zero
+                    };
+                    options.Events = new JwtBearerEvents
+                    {
+                        OnTokenValidated = async context =>
+                        {
+                            var jti = context.Principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+                            var userId = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                            if (string.IsNullOrWhiteSpace(jti) || !Guid.TryParse(userId, out var id))
+                            {
+                                context.Fail("JWT thiếu định danh phiên");
+                                return;
+                            }
+                            var db = context.HttpContext.RequestServices.GetRequiredService<ProjectDACNDbContext>();
+                            if (await db.BlackListTokens.AnyAsync(x => x.Token == jti) ||
+                                !await db.Users.AnyAsync(x => x.Id == id && x.Status == 1 && x.EmailVerifiedAt != null))
+                                context.Fail("Phiên không còn hợp lệ");
+                        }
                     };
                 });
 
@@ -129,6 +173,17 @@ namespace Project.Api
                 });
 
                 var app = builder.Build();
+                if (!app.Environment.IsDevelopment())
+                {
+                    var allowedOrigins = app.Configuration.GetSection("Security:AllowedOrigins").Get<string[]>();
+                    if (allowedOrigins == null || allowedOrigins.Length == 0 ||
+                        allowedOrigins.Any(x => !Uri.TryCreate(x, UriKind.Absolute, out var uri) || uri.Scheme != "https"))
+                        throw new InvalidOperationException("Configure HTTPS Security:AllowedOrigins before startup");
+                    var frontendUrl = app.Configuration["Mail:PublicFrontendUrl"];
+                    if (!Uri.TryCreate(frontendUrl, UriKind.Absolute, out var frontendUri) || frontendUri.Scheme != "https")
+                        throw new InvalidOperationException("Configure HTTPS Mail:PublicFrontendUrl before startup");
+                    _ = app.Services.GetRequiredService<IVerificationEmailSender>();
+                }
 
                 // Cấu hình HTTP request pipeline
                 if (app.Environment.IsDevelopment())
@@ -146,6 +201,7 @@ namespace Project.Api
                 app.UseMiddleware<ExceptionMiddleware>();
                 app.UseHttpsRedirection();
                 app.UseRouting();
+                app.UseRateLimiter();
                 // Middleware xác thực và phân quyền
                 app.UseAuthentication();
                 app.UseAuthorization();
