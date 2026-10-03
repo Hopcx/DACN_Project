@@ -34,6 +34,7 @@ namespace Project.Infrastructure.Persistence
         public virtual DbSet<Exam> Exams { get; set; }
 
         public virtual DbSet<ExamActivityLog> ExamActivityLogs { get; set; }
+        public DbSet<ClassExamSchedule> UserExamSchedules { get; set; }
 
         public virtual DbSet<ExamDetail> ExamDetails { get; set; }
 
@@ -57,6 +58,8 @@ namespace Project.Infrastructure.Persistence
         public virtual DbSet<QuestionType> QuestionTypes { get; set; }
 
         public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
+        public DbSet<EmailVerificationToken> EmailVerificationTokens { get; set; }
+        public DbSet<BlackListToken> BlackListTokens { get; set; }
 
         public virtual DbSet<Room> Rooms { get; set; }
 
