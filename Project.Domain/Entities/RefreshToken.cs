@@ -14,7 +14,8 @@ namespace Project.Domain.Entities
 
         public Guid UserId { get; set; }
 
-        public string Token { get; set; } = null!;
+        public string TokenHash { get; set; } = null!;
+        public Guid FamilyId { get; set; }
 
         public DateTime ExpiryDate { get; set; }
 

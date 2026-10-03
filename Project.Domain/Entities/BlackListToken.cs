@@ -13,8 +13,8 @@ namespace Project.Domain.Entities
         public int Id { get; set; }
         [Required]
         [MaxLength(255)]
-        public string Token { get; set; }
+        public string Token { get; set; } = null!; // JWT jti, never the JWT itself.
         public DateTime ExpiryDate { get; set; }
-        public DateTime BlacklistAt { get; set; } = DateTime.Now;
+        public DateTime BlacklistAt { get; set; } = DateTime.UtcNow;
     }
 }

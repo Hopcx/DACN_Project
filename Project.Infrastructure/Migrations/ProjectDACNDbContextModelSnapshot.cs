@@ -22,6 +22,34 @@ namespace Project.Infrastructure.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("Project.Domain.Entities.BlackListToken", b =>
+                {
+                    b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("int");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    b.Property<DateTime>("BlacklistAt").HasColumnType("datetime2");
+                    b.Property<DateTime>("ExpiryDate").HasColumnType("datetime2");
+                    b.Property<string>("Token").IsRequired().HasMaxLength(255).HasColumnType("nvarchar(255)");
+                    b.HasKey("Id");
+                    b.HasIndex("ExpiryDate");
+                    b.HasIndex("Token").IsUnique();
+                    b.ToTable("BlackListTokens");
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.EmailVerificationToken", b =>
+                {
+                    b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("int");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    b.Property<DateTime?>("ConsumedAt").HasColumnType("datetime2");
+                    b.Property<DateTime>("CreatedAt").HasColumnType("datetime2");
+                    b.Property<DateTime>("ExpiresAt").HasColumnType("datetime2");
+                    b.Property<string>("TokenHash").IsRequired().HasMaxLength(64).HasColumnType("nvarchar(64)");
+                    b.Property<Guid>("UserId").HasColumnType("uniqueidentifier");
+                    b.HasKey("Id");
+                    b.HasIndex("TokenHash").IsUnique();
+                    b.HasIndex("UserId", "CreatedAt");
+                    b.ToTable("EmailVerificationTokens");
+                });
+
             modelBuilder.Entity("Project.Domain.Entities.Answer", b =>
                 {
                     b.Property<int>("Id")
@@ -717,18 +745,26 @@ namespace Project.Infrastructure.Migrations
                     b.Property<DateTime>("ExpiryDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid>("FamilyId")
+                        .HasDefaultValueSql("NEWID()")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("IsRevoked")
                         .HasColumnType("bit");
 
-                    b.Property<string>("Token")
+                    b.Property<string>("TokenHash")
                         .IsRequired()
-                        .HasMaxLength(550)
-                        .HasColumnType("nvarchar(550)");
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("FamilyId", "IsRevoked");
+
+                    b.HasIndex("TokenHash");
 
                     b.ToTable("RefreshTokens");
                 });
@@ -902,11 +938,17 @@ namespace Project.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<DateTime?>("EmailVerifiedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("LastLogin")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LastVerificationSentAt")
                         .HasColumnType("datetime2");
 
                     b.Property<int>("LevelId")
@@ -917,7 +959,6 @@ namespace Project.Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PhoneNumber")
-                        .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
                     b.Property<bool>("Sex")
@@ -938,7 +979,8 @@ namespace Project.Infrastructure.Migrations
                     b.HasIndex("LevelId");
 
                     b.HasIndex("PhoneNumber")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[PhoneNumber] IS NOT NULL");
 
                     b.HasIndex("UserName")
                         .IsUnique();
@@ -1222,6 +1264,15 @@ namespace Project.Infrastructure.Migrations
                     b.Navigation("ExamSchedule");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.EmailVerificationToken", b =>
+                {
+                    b.HasOne("Project.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Project.Domain.Entities.User", b =>

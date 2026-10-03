@@ -6,10 +6,16 @@ using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using Project.Application.Services;
 using Project.Infrastructure.Persistence;
+using Project.Api.Filters;
+using Project.Api.Services;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.RateLimiting;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace Project.Api.Controllers
 {
     [ApiController]
+    [ServiceFilter(typeof(AuthCsrfFilter))]
     [Route("web/auth")]
     public class AuthController : ControllerBase
     {
@@ -17,17 +23,29 @@ namespace Project.Api.Controllers
         private readonly IJwtService _jwtService;
         private readonly ProjectDACNDbContext _dbContext;
         private readonly IConfiguration _configuration;
+        private readonly IAntiforgery _antiforgery;
+        private const string RefreshCookie = "__Secure-dacn-refresh";
 
         public AuthController(
             IUserRepository userRepository,
             IJwtService jwtService,
             ProjectDACNDbContext dbContext,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IAntiforgery antiforgery)
         {
             _userRepository = userRepository;
             _jwtService = jwtService;
             _dbContext = dbContext;
             _configuration = configuration;
+            _antiforgery = antiforgery;
+        }
+
+        [HttpGet("csrf")]
+        [AllowAnonymous]
+        public IActionResult Csrf()
+        {
+            var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
+            return Ok(ApiResponse<object>.Ok(new { csrfToken = tokens.RequestToken }));
         }
 
         /// <summary>
@@ -35,6 +53,7 @@ namespace Project.Api.Controllers
         /// </summary>
         [HttpPost("login")]
         [AllowAnonymous]
+        [EnableRateLimiting("auth-public")]
         public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
             var user = await _userRepository.GetByKeyAndPasswordAsync(dto.Keyword, dto.Password);
@@ -44,9 +63,9 @@ namespace Project.Api.Controllers
                 return Unauthorized(ApiResponse<string>.Fail("Invalid credentials"));
             }
 
-            if (user.Status != 1)
+            if (user.Status != 1 || user.EmailVerifiedAt == null)
             {
-                return Unauthorized(ApiResponse<string>.Fail("User account is disabled"));
+                return Unauthorized(ApiResponse<string>.Fail("Tài khoản chưa xác minh hoặc không hoạt động"));
             }
 
             // Lấy danh sách PermissionId của user
@@ -60,30 +79,30 @@ namespace Project.Api.Controllers
 
             // Generate RefreshToken và lưu DB
             var refreshToken = GenerateSecureRefreshToken();
-            var refreshExpiryMinutes = int.Parse(_configuration["JwtSettings:RefreshTokenExpiryMinutes"] ?? "43200"); // default 30 ngày
+            var refreshExpiryMinutes = RefreshExpiryMinutes();
 
             // Revoke toàn bộ refresh token cũ của user để tránh lạm dụng
-            var oldTokens = _dbContext.RefreshTokens.Where(r => r.UserId == user.Id && !r.IsRevoked);
-            foreach (var old in oldTokens)
-            {
-                old.IsRevoked = true;
-            }
+            await using var loginTransaction = await _dbContext.Database.BeginTransactionAsync();
+            await _dbContext.RefreshTokens.Where(r => r.UserId == user.Id && !r.IsRevoked)
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.IsRevoked, true));
 
             await _dbContext.RefreshTokens.AddAsync(new Project.Domain.Entities.RefreshToken
             {
                 UserId = user.Id,
-                Token = refreshToken,
+                TokenHash = AuthTokenTools.Hash(refreshToken),
+                FamilyId = Guid.NewGuid(),
                 CreatedAt = DateTime.UtcNow,
                 ExpiryDate = DateTime.UtcNow.AddMinutes(refreshExpiryMinutes),
                 IsRevoked = false
             });
 
             await _dbContext.SaveChangesAsync();
+            await loginTransaction.CommitAsync();
+            SetRefreshCookie(refreshToken, refreshExpiryMinutes);
 
             return Ok(ApiResponse<LoginResponseDto>.Ok(new LoginResponseDto
             {
                 AccessToken = accessToken,
-                RefreshToken = refreshToken,
                 UserId = user.Id,
                 UserName = user.UserName,
                 Email = user.Email,
@@ -103,24 +122,35 @@ namespace Project.Api.Controllers
         /// </summary>
         [HttpPost("refresh")]
         [AllowAnonymous]
-        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
+        [EnableRateLimiting("auth-session")]
+        public async Task<IActionResult> RefreshToken()
         {
-            if (string.IsNullOrWhiteSpace(request.RefreshToken))
+            if (!Request.Cookies.TryGetValue(RefreshCookie, out var rawToken) || string.IsNullOrWhiteSpace(rawToken))
             {
-                return BadRequest(ApiResponse<string>.Fail("Refresh token không hợp lệ"));
+                return Unauthorized(ApiResponse<string>.Fail("Không có refresh cookie"));
             }
 
-            var storedToken = await _dbContext.RefreshTokens
-                .FirstOrDefaultAsync(r => r.Token == request.RefreshToken);
+            var tokenHash = AuthTokenTools.Hash(rawToken);
+            var storedToken = await _dbContext.RefreshTokens.AsNoTracking()
+                .FirstOrDefaultAsync(r => r.TokenHash == tokenHash);
 
-            if (storedToken == null || storedToken.IsRevoked || storedToken.ExpiryDate <= DateTime.UtcNow)
+            if (storedToken == null || storedToken.ExpiryDate <= DateTime.UtcNow)
             {
+                DeleteRefreshCookie();
                 return Unauthorized(ApiResponse<string>.Fail("Refresh token đã hết hạn hoặc không hợp lệ"));
+            }
+            if (storedToken.IsRevoked)
+            {
+                await _dbContext.RefreshTokens.Where(r => r.FamilyId == storedToken.FamilyId && !r.IsRevoked)
+                    .ExecuteUpdateAsync(s => s.SetProperty(r => r.IsRevoked, true));
+                DeleteRefreshCookie();
+                return Unauthorized(ApiResponse<string>.Fail("Refresh token đã được sử dụng lại"));
             }
 
             var user = await _userRepository.GetByIdUserSendMailAsync(storedToken.UserId);
-            if (user == null || user.Status != 1)
+            if (user == null || user.Status != 1 || user.EmailVerifiedAt == null)
             {
+                DeleteRefreshCookie();
                 return Unauthorized(ApiResponse<string>.Fail("Tài khoản không còn hoạt động"));
             }
 
@@ -129,29 +159,41 @@ namespace Project.Api.Controllers
                 .Select(up => up.PermissionId)
                 .ToListAsync();
 
-            // Revoke token cũ
-            storedToken.IsRevoked = true;
+            // Conditional update serializes concurrent use of the same refresh token.
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            var revoked = await _dbContext.RefreshTokens
+                .Where(r => r.Id == storedToken.Id && !r.IsRevoked && r.ExpiryDate > DateTime.UtcNow)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(r => r.IsRevoked, true));
+            if (revoked != 1)
+            {
+                await _dbContext.RefreshTokens.Where(r => r.FamilyId == storedToken.FamilyId && !r.IsRevoked)
+                    .ExecuteUpdateAsync(s => s.SetProperty(r => r.IsRevoked, true));
+                await transaction.CommitAsync();
+                DeleteRefreshCookie();
+                return Unauthorized(ApiResponse<string>.Fail("Refresh token đã được sử dụng hoặc thu hồi"));
+            }
 
-            // Tạo token mới
             var accessToken = _jwtService.GenerateToken(user.Id, user.UserName, user.LevelId, permissionIds);
             var newRefreshToken = GenerateSecureRefreshToken();
-            var refreshExpiryMinutes = int.Parse(_configuration["JwtSettings:RefreshTokenExpiryMinutes"] ?? "43200"); // default 30 ngày
+            var refreshExpiryMinutes = RefreshExpiryMinutes();
 
             await _dbContext.RefreshTokens.AddAsync(new Project.Domain.Entities.RefreshToken
             {
                 UserId = user.Id,
-                Token = newRefreshToken,
+                TokenHash = AuthTokenTools.Hash(newRefreshToken),
+                FamilyId = storedToken.FamilyId,
                 CreatedAt = DateTime.UtcNow,
                 ExpiryDate = DateTime.UtcNow.AddMinutes(refreshExpiryMinutes),
                 IsRevoked = false
             });
 
             await _dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+            SetRefreshCookie(newRefreshToken, refreshExpiryMinutes);
 
             return Ok(ApiResponse<LoginResponseDto>.Ok(new LoginResponseDto
             {
                 AccessToken = accessToken,
-                RefreshToken = newRefreshToken,
                 UserId = user.Id,
                 UserName = user.UserName,
                 Email = user.Email,
@@ -165,9 +207,12 @@ namespace Project.Api.Controllers
         /// </summary>
         [HttpGet("me")]
         [Authorize]
-        public IActionResult GetCurrentUser()
+        public async Task<IActionResult> GetCurrentUser()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!Guid.TryParse(userId, out var id) ||
+                !await _dbContext.Users.AnyAsync(u => u.Id == id && u.Status == 1))
+                return Unauthorized(ApiResponse<string>.Fail("Tài khoản không còn hoạt động"));
             var userName = User.FindFirstValue(ClaimTypes.Name);
             var levelId = User.FindFirstValue("level_id");
             var permissionIds = User.FindAll("permission").Select(c => c.Value).ToList();
@@ -181,15 +226,56 @@ namespace Project.Api.Controllers
             }));
         }
 
+        [HttpPost("logout")]
+        [Authorize]
+        [EnableRateLimiting("auth-session")]
+        public async Task<IActionResult> Logout()
+        {
+            if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return Unauthorized();
+            var jti = User.FindFirstValue(JwtRegisteredClaimNames.Jti);
+            var bearer = Request.Headers.Authorization.ToString();
+            if (string.IsNullOrWhiteSpace(jti) || !bearer.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                return Unauthorized(ApiResponse<string>.Fail("JWT không có jti/exp"));
+            var jwt = new JwtSecurityTokenHandler().ReadJwtToken(bearer[7..].Trim());
+            if (jwt.Id != jti || jwt.ValidTo <= DateTime.UtcNow)
+                return Unauthorized(ApiResponse<string>.Fail("JWT không hợp lệ"));
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            _dbContext.BlackListTokens.Add(new Project.Domain.Entities.BlackListToken
+            {
+                Token = jti,
+                ExpiryDate = jwt.ValidTo,
+                BlacklistAt = DateTime.UtcNow
+            });
+            await _dbContext.RefreshTokens.Where(r => r.UserId == userId && !r.IsRevoked)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(r => r.IsRevoked, true));
+            await _dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+            DeleteRefreshCookie();
+            return Ok(ApiResponse<string>.Ok(string.Empty, "Đã thu hồi các phiên làm mới"));
+        }
+
+        private int RefreshExpiryMinutes() =>
+            int.Parse(_configuration["JwtSettings:RefreshTokenExpiryMinutes"] ?? "43200");
+
+        private void SetRefreshCookie(string token, int expiryMinutes) => Response.Cookies.Append(
+            RefreshCookie, token, new CookieOptions
+            {
+                HttpOnly = true, Secure = true, SameSite = SameSiteMode.Lax,
+                Path = "/web/auth", MaxAge = TimeSpan.FromMinutes(expiryMinutes)
+            });
+
+        private void DeleteRefreshCookie() => Response.Cookies.Delete(RefreshCookie, new CookieOptions
+        {
+            HttpOnly = true, Secure = true, SameSite = SameSiteMode.Lax, Path = "/web/auth"
+        });
+
         /// <summary>
         /// Sinh refresh token ngẫu nhiên, đủ dài, dùng cho DB.
         /// </summary>
         private static string GenerateSecureRefreshToken()
         {
-            var randomNumber = new byte[64];
-            using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
-            rng.GetBytes(randomNumber);
-            return Convert.ToBase64String(randomNumber);
+            return AuthTokenTools.NewToken();
         }
     }
 
@@ -207,10 +293,8 @@ namespace Project.Api.Controllers
         public string AccessToken { get; set; } = null!;
 
         /// <summary>
-        /// Refresh Token lưu ở client (vd: httpOnly cookie) để xin AccessToken mới khi hết hạn.
+        /// Refresh token chỉ được đặt trong cookie HttpOnly, không có trong JSON response.
         /// </summary>
-        public string RefreshToken { get; set; } = null!;
-
         public Guid UserId { get; set; }
         public string UserName { get; set; } = null!;
         public string Email { get; set; } = null!;
@@ -222,8 +306,4 @@ namespace Project.Api.Controllers
         public List<int> PermissionIds { get; set; } = new();
     }
 
-    public class RefreshTokenRequest
-    {
-        public string RefreshToken { get; set; } = null!;
-    }
 }

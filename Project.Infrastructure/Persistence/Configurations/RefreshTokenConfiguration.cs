@@ -14,8 +14,10 @@ namespace Project.Infrastructure.Persistence.Configurations
     {
         public void Configure(EntityTypeBuilder<RefreshToken> entity)
         {
-            entity.Property(e => e.Token)
-                  .HasMaxLength(550);
+            entity.Property(e => e.TokenHash).HasMaxLength(64).IsRequired();
+            entity.Property(e => e.FamilyId).HasDefaultValueSql("NEWID()");
+            entity.HasIndex(e => e.TokenHash);
+            entity.HasIndex(e => new { e.FamilyId, e.IsRevoked });
         }
     }
 
