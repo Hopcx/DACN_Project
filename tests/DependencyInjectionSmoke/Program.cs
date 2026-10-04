@@ -11,6 +11,7 @@ using Project.Application.DTOs.AnswerCreateDto;
 using System.Security.Claims;
 using System.Text.Json;
 using Project.Api.Controllers;
+using Project.Api.Services;
 using Project.Application;
 using Project.Application.Interfaces.Services;
 using Project.Domain.Interfaces.ADO;
@@ -27,6 +28,8 @@ var configuration = new ConfigurationBuilder()
 var services = new ServiceCollection();
 services.AddSingleton<IConfiguration>(configuration);
 services.AddLogging();
+services.AddSingleton<IVerificationEmailSender, SmokeEmailSender>();
+services.AddSingleton<Microsoft.AspNetCore.Hosting.IWebHostEnvironment, SmokeWebHostEnvironment>();
 services.AddProjectAuthorization();
 services.AddApplication();
 services.AddInfrastructure(configuration);
@@ -53,6 +56,7 @@ var controllerTypes = new[]
     typeof(ExamDetailQuestionController), typeof(LogController),
     typeof(UserPermissionController), typeof(UserController),
     typeof(RoomController), typeof(SubmissionController)
+    , typeof(QuestionController), typeof(AnswerController)
 };
 
 foreach (var controllerType in controllerTypes)
@@ -100,7 +104,7 @@ if (!unauthenticatedResult.Challenged || !forbiddenResult.Forbidden)
     throw new Exception("Expected 401 challenge and 403 forbid decisions.");
 
 var protectedControllers = typeof(UserController).Assembly.GetTypes()
-    .Where(t => t.IsSubclassOf(typeof(ControllerBase)) && t != typeof(AuthController));
+    .Where(t => t.IsSubclassOf(typeof(ControllerBase)) && t != typeof(AuthController) && t != typeof(RegistrationController));
 foreach (var controller in protectedControllers)
     if (controller != typeof(WeatherForecastController) &&
         controller.GetCustomAttributes(typeof(AuthorizeAttribute), true).Length == 0)
@@ -120,6 +124,11 @@ var attemptAnswer = AnswerForAttemptDto.Projection.Compile()(new Project.Domain.
 if (JsonSerializer.Serialize(attemptAnswer).Contains("IsCorrect", StringComparison.OrdinalIgnoreCase))
     throw new Exception("Student answer projection leaked correctness.");
 
+if ((await authorization.AuthorizeAsync(student, null, "QuestionManagement")).Succeeded ||
+    !(await authorization.AuthorizeAsync(Principal("2", "2"), null, "QuestionManagement")).Succeeded)
+    throw new Exception("Question permission contract failed.");
+await QuestionValidationSmoke.Run();
+
 Console.WriteLine($"DI smoke passed: {serviceTypes.Length} services, {controllerTypes.Length} controllers, scoped IADO/repository. No SQL connection attempted.");
 Console.WriteLine("Security contract passed: fallback, admin and exam permissions, controller policies, closed submission writes, user DTO.");
 
@@ -128,4 +137,19 @@ static ClaimsPrincipal Principal(string level, params string[] permissions)
     var claims = new List<Claim> { new("level_id", level) };
     claims.AddRange(permissions.Select(p => new Claim("permission", p)));
     return new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+}
+
+sealed class SmokeEmailSender : IVerificationEmailSender
+{
+    public Task SendAsync(string recipient, string verificationUrl) => Task.CompletedTask;
+}
+
+sealed class SmokeWebHostEnvironment : Microsoft.AspNetCore.Hosting.IWebHostEnvironment
+{
+    public string EnvironmentName { get; set; } = "Development";
+    public string ApplicationName { get; set; } = "DependencyInjectionSmoke";
+    public string ContentRootPath { get; set; } = ".";
+    public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } = new Microsoft.Extensions.FileProviders.NullFileProvider();
+    public string WebRootPath { get; set; } = ".";
+    public Microsoft.Extensions.FileProviders.IFileProvider WebRootFileProvider { get; set; } = new Microsoft.Extensions.FileProviders.NullFileProvider();
 }
