@@ -46,40 +46,23 @@ namespace Project.Infrastructure.Persistence.Repositories
 
         public async Task<Room> UpdateRoomAsync(int id, Room r)
         {
-            try
-            {
-                var roomUpdate = await _context.Rooms.FindAsync(id);
-                if (roomUpdate == null)
-                    return null;
-
-                roomUpdate.Name = r.Name;
-                roomUpdate.Status = r.Status;
-                roomUpdate.Capacity = r.Capacity;
-                roomUpdate.Address = r.Address;
-                await _context.SaveChangesAsync();
-                return roomUpdate;
-            }
-            catch (Exception)
-            {
-                return null;
-            }
+            var roomUpdate = await _context.Rooms.FindAsync(id);
+            if (roomUpdate == null) return null;
+            roomUpdate.Name = r.Name;
+            roomUpdate.Status = r.Status;
+            roomUpdate.Capacity = r.Capacity;
+            roomUpdate.Address = r.Address;
+            await _context.SaveChangesAsync();
+            return roomUpdate;
         }
 
         public async Task<Room> DeleteRoomAsync(int id)
         {
-            try
-            {
-                var deleteRoom = await _context.Rooms.FindAsync(id);
-
-                _context.Rooms.Remove(deleteRoom);
-                await _context.SaveChangesAsync();
-                return deleteRoom;
-            }
-            catch (Exception)
-            {
-
-                return null;
-            }
+            var deleteRoom = await _context.Rooms.FindAsync(id);
+            if (deleteRoom == null) return null;
+            _context.Rooms.Remove(deleteRoom);
+            await _context.SaveChangesAsync();
+            return deleteRoom;
         }
 
         public async Task<(List<Room> Rooms, int TotalCount)> GetRoomsAsync(string? name, bool? status, int? minCapacity, int? maxCapacity, int page, int pageSize)
@@ -101,6 +84,7 @@ namespace Project.Infrastructure.Persistence.Repositories
             var totalCount = await query.CountAsync();
 
             var rooms = await query
+                .OrderBy(r => r.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
