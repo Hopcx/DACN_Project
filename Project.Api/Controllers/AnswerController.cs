@@ -27,41 +27,24 @@ namespace Project.Api.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> CreateAnswerAsync(AnswerCreateDto dto)
+        public IActionResult CreateAnswerAsync(AnswerCreateDto dto)
         {
-            var result = await _service.CreateAnswerAsync(dto);
-
-            if (result == null)
-                return BadRequest(ApiResponse<string>.Fail("Tạo Answer thất bại."));
-
-            return Created("", ApiResponse<AnswerResponseDto>.Ok(result));
+            return StatusCode(405, ApiResponse<string>.Fail("Hãy lưu câu hỏi cùng toàn bộ đáp án qua /web/questions."));
         }
 
 
 
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteAnswerAsync(int id)
+        public IActionResult DeleteAnswerAsync(int id)
         {
-            var isDeleted = await _service.DeleteAnswerAsync(id);
-
-            if (!isDeleted)
-            {
-                return NotFound(ApiResponse<string>.Fail("Answer không tồn tại hoặc xóa thất bại."));
-            }
-
-            return Ok(ApiResponse<string>.Ok($"Xóa Answer với ID {id} thành công."));
+            return StatusCode(405, ApiResponse<string>.Fail("Hãy lưu câu hỏi cùng toàn bộ đáp án qua /web/questions."));
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateAnswerAsync(int id, AnswerCreateDto dto)
+        public IActionResult UpdateAnswerAsync(int id, AnswerCreateDto dto)
         {
-            var result = await _service.UpdateAnswerAsync(id, dto);
-
-            if (result == null)
-                return BadRequest(ApiResponse<string>.Fail("Cập nhật Answer thất bại."));
-
-            return Ok(ApiResponse<AnswerResponseDto>.Ok(result, "Cập nhật Answer thành công."));
+            return StatusCode(405, ApiResponse<string>.Fail("Hãy lưu câu hỏi cùng toàn bộ đáp án qua /web/questions."));
 
         }
 
