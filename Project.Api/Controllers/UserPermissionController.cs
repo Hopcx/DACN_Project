@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using Project.Application.Common;
 using Project.Application.DTOs.UserPermissionDTO;
 using Project.Application.Interfaces.Services;
+using Microsoft.EntityFrameworkCore;
+using Project.Infrastructure.Persistence;
 
 namespace Project.Api.Controllers
 {
@@ -11,10 +13,12 @@ namespace Project.Api.Controllers
     public class UserPermissionController : ControllerBase
     {
         private readonly IUserPermissionService _service;
+        private readonly ProjectDACNDbContext _db;
 
-        public UserPermissionController(IUserPermissionService service)
+        public UserPermissionController(IUserPermissionService service, ProjectDACNDbContext db)
         {
             _service = service;
+            _db = db;
         }
 
         [HttpGet]
@@ -37,6 +41,11 @@ namespace Project.Api.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] UserPermissionCreateDto dto)
         {
+            if (!await _db.Users.AnyAsync(x => x.Id == dto.UserId) ||
+                !await _db.Permissions.AnyAsync(x => x.Id == dto.PermissionId))
+                return BadRequest(ApiResponse<string>.Fail("Tài khoản hoặc quyền không tồn tại"));
+            if (await _db.UserPermissions.AnyAsync(x => x.UserId == dto.UserId && x.PermissionId == dto.PermissionId))
+                return Conflict(ApiResponse<string>.Fail("Tài khoản đã có quyền này"));
             var result = await _service.CreateAsync(dto);
             if (result == null)
                 return BadRequest(ApiResponse<string>.Fail("Tạo User permission thất bại"));
@@ -47,6 +56,11 @@ namespace Project.Api.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] UserPermissionCreateDto dto)
         {
+            if (!await _db.Users.AnyAsync(x => x.Id == dto.UserId) ||
+                !await _db.Permissions.AnyAsync(x => x.Id == dto.PermissionId))
+                return BadRequest(ApiResponse<string>.Fail("Tài khoản hoặc quyền không tồn tại"));
+            if (await _db.UserPermissions.AnyAsync(x => x.Id != id && x.UserId == dto.UserId && x.PermissionId == dto.PermissionId))
+                return Conflict(ApiResponse<string>.Fail("Tài khoản đã có quyền này"));
             var result = await _service.UpdateAsync(id, dto);
             if (result == null)
                 return NotFound(ApiResponse<string>.Fail("User permission không tồn tại"));

@@ -5,6 +5,8 @@ using Project.Application.DTOs;
 using Project.Application.DTOs.LevelDTO;
 using Project.Application.DTOs.RoomDTO;
 using Project.Application.Interfaces.Services;
+using Microsoft.EntityFrameworkCore;
+using Project.Infrastructure.Persistence;
 
 namespace Project.Api.Controllers
 {
@@ -16,15 +18,21 @@ namespace Project.Api.Controllers
     public class RoomController : ControllerBase
     {
         private readonly IRoomService _service;
+        private readonly ProjectDACNDbContext _db;
 
-        public RoomController(IRoomService service)
+        public RoomController(IRoomService service, ProjectDACNDbContext db)
         {
             _service = service;
+            _db = db;
         }
 
         [HttpGet]
         public async Task<IActionResult> GetRooms([FromQuery] RoomQueryDto query)
         {
+            if (query.MinCapacity > query.MaxCapacity)
+                return BadRequest(ApiResponse<string>.Fail("Sức chứa tối thiểu phải nhỏ hơn hoặc bằng sức chứa tối đa"));
+            if ((long)(query.Page - 1) * query.PageSize > int.MaxValue)
+                return BadRequest(ApiResponse<string>.Fail("Trang yêu cầu vượt giới hạn"));
             var result = await _service.GetRoomsAsync(query);
             return Ok(ApiResponse<PagedResult<RoomResponseDto>>.Ok(result));
         }
@@ -62,7 +70,14 @@ namespace Project.Api.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteRoomAsync(int id)
         {
-            var isDeleted = await _service.DeleteRoomAsync(id);
+            if (await _db.ExamSchedules.AnyAsync(x => x.RoomId == id))
+                return Conflict(ApiResponse<string>.Fail("Không thể xóa phòng đã có lịch thi"));
+            bool isDeleted;
+            try { isDeleted = await _service.DeleteRoomAsync(id); }
+            catch (DbUpdateException)
+            {
+                return Conflict(ApiResponse<string>.Fail("Không thể xóa phòng đang được sử dụng"));
+            }
             if (!isDeleted)
                 return NotFound(ApiResponse<string>.Fail("Room không tồn tại hoặc xóa thất bại"));
 

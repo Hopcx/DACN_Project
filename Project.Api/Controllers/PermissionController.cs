@@ -40,6 +40,8 @@ namespace Project.Api.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeletePermissionAsync(int id)
         {
+            if (id >= 1 && id <= 4)
+                return Conflict(ApiResponse<string>.Fail("Quyền hệ thống đang được sử dụng"));
             var isDeleted = await _service.DeletePermissionAsync(id);
 
             if (!isDeleted)
@@ -53,6 +55,8 @@ namespace Project.Api.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdatePermissionAsync(int id, PermissionCreateDto dto)
         {
+            if (id >= 1 && id <= 4 && dto.Status != 1)
+                return Conflict(ApiResponse<string>.Fail("Không thể vô hiệu hóa quyền hệ thống"));
             var result = await _service.UpdatePermissionsAsync(id, dto);
 
             if (result == null)

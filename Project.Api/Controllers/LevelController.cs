@@ -43,6 +43,8 @@ namespace Project.Api.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteLevelAsync(int id)
         {
+            if (id >= 1 && id <= 4)
+                return Conflict(ApiResponse<string>.Fail("Cấp tài khoản hệ thống đang được sử dụng"));
             var isDeleted = await _service.DeleteLevelAsync(id);
 
             if (!isDeleted)
@@ -69,6 +71,8 @@ namespace Project.Api.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateLevelAsync(int id, LevelCreateDto dto)
         {
+            if (id >= 1 && id <= 4 && dto.Status != 1)
+                return Conflict(ApiResponse<string>.Fail("Không thể vô hiệu hóa cấp tài khoản hệ thống"));
             var result = await _service.UpdateLevelAsync(id, dto);
 
             if (result == null)
