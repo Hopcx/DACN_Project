@@ -18,9 +18,10 @@ namespace Project.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll([FromQuery] string? textSearch)
+        public async Task<IActionResult> GetAll([FromQuery] string? textSearch, [FromQuery] int? subjectId,
+            [FromQuery] int? questionTypeId, [FromQuery] int? questionLevelId)
         {
-            var result = await _service.GetAllAsync(textSearch);
+            var result = await _service.GetAllAsync(textSearch, subjectId, questionTypeId, questionLevelId);
             return Ok(ApiResponse<List<QuestionResponseDto>>.Ok(result));
         }
 
@@ -32,6 +33,13 @@ namespace Project.Api.Controllers
                 return NotFound(ApiResponse<string>.Fail("Question không tồn tại"));
 
             return Ok(ApiResponse<QuestionResponseDto>.Ok(result));
+        }
+
+        [HttpGet("subjects")]
+        public async Task<IActionResult> GetSubjects()
+        {
+            var result = await _service.GetSubjectsAsync();
+            return Ok(ApiResponse<List<QuestionSubjectDto>>.Ok(result));
         }
 
         [HttpPost]
@@ -49,7 +57,9 @@ namespace Project.Api.Controllers
         {
             var result = await _service.UpdateAsync(id, dto);
             if (result == null)
-                return NotFound(ApiResponse<string>.Fail("Question không tồn tại"));
+                return await _service.GetByIdAsync(id) == null
+                    ? NotFound(ApiResponse<string>.Fail("Question không tồn tại"))
+                    : Conflict(ApiResponse<string>.Fail("Câu hỏi đã được sử dụng, không thể sửa đáp án hoặc nội dung."));
 
             return Ok(ApiResponse<QuestionResponseDto>.Ok(result, "Cập nhật Question thành công"));
         }
@@ -59,7 +69,9 @@ namespace Project.Api.Controllers
         {
             var deleted = await _service.DeleteAsync(id);
             if (!deleted)
-                return NotFound(ApiResponse<string>.Fail("Question không tồn tại hoặc xóa thất bại"));
+                return await _service.GetByIdAsync(id) == null
+                    ? NotFound(ApiResponse<string>.Fail("Question không tồn tại"))
+                    : Conflict(ApiResponse<string>.Fail("Câu hỏi đã được sử dụng, không thể ẩn."));
 
             return Ok(ApiResponse<string>.Ok($"Xóa Question với ID {id} thành công"));
         }

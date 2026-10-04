@@ -43,6 +43,9 @@ namespace Project.Domain.Entities
 
         public virtual ICollection<QuestionAnswer> QuestionAnswers { get; set; } = new List<QuestionAnswer>();
 
+        [NotMapped]
+        public bool IsUsedInExam { get; set; }
+
         public virtual QuestionLevel? QuestionLevel { get; set; }
 
         public virtual QuestionType QuestionType { get; set; } = null!;
