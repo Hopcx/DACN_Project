@@ -4,6 +4,8 @@ namespace Project.Application.DTOs.SubjectDTO
 {
     public class SubjectCreateDto
     {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.StringLength(200)]
         public string Name { get; set; } = null!;
         public string? Description { get; set; }
         public byte? Status { get; set; }

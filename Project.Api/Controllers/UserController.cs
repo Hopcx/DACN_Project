@@ -8,6 +8,8 @@ using Microsoft.EntityFrameworkCore;
 using Project.Infrastructure.Persistence;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.Data.SqlClient;
+using Project.Api.Services;
+using Project.Domain.Entities;
 
 namespace Project.Api.Controllers
 {
@@ -18,10 +20,20 @@ namespace Project.Api.Controllers
     {
         private readonly IUserService _userService;
         private readonly ProjectDACNDbContext _db;
-        public UserController(IUserService userService, ProjectDACNDbContext db)
+        private readonly IVerificationEmailSender _email;
+        private readonly IConfiguration _configuration;
+        private readonly IWebHostEnvironment _environment;
+        private readonly ILogger<UserController> _logger;
+        public UserController(IUserService userService, ProjectDACNDbContext db,
+            IVerificationEmailSender email, IConfiguration configuration, IWebHostEnvironment environment,
+            ILogger<UserController> logger)
         {
             _userService = userService;
             _db = db;
+            _email = email;
+            _configuration = configuration;
+            _environment = environment;
+            _logger = logger;
         }
 
         [HttpGet("{id:guid}")]
@@ -62,14 +74,33 @@ namespace Project.Api.Controllers
         }
 
         [HttpGet("get-all-users")]
-        public async Task<IActionResult> GetAllUserAsync()
+        public async Task<IActionResult> GetAllUserAsync([FromQuery] string? search)
         {
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim();
+                if (term.Length > 100)
+                    return BadRequest(ApiResponse<string>.Fail("Từ khóa tìm kiếm quá dài"));
+                var matched = await _db.Users.AsNoTracking()
+                    .Where(x => x.FullName.Contains(term) || x.UserName.Contains(term) || x.Email.Contains(term))
+                    .OrderBy(x => x.UserName).ThenBy(x => x.Id)
+                    .ToListAsync();
+                return Ok(ApiResponse<List<UserResponseDto>>.Ok(matched.Select(UserAccountMapper.ToDto).ToList()));
+            }
             var result = await _userService.GetAllUsserAsync();
             return Ok(ApiResponse<List<UserResponseDto>>.Ok(result));
         }
         [HttpDelete("delete-user-{id}")]
         public async Task<IActionResult> DeleteUsserAsync(string id)
         {
+            if (!Guid.TryParse(id, out var userId))
+                return BadRequest(ApiResponse<string>.Fail("ID tài khoản không hợp lệ"));
+            if (User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value == id ||
+                User.FindFirst("sub")?.Value == id)
+                return Conflict(ApiResponse<string>.Fail("Không thể tự xóa tài khoản đang đăng nhập"));
+            if (await _db.Users.AnyAsync(x => x.Id == userId && x.LevelId == 1) &&
+                await _db.Users.CountAsync(x => x.LevelId == 1 && x.Status == 1) <= 1)
+                return Conflict(ApiResponse<string>.Fail("Không thể xóa tài khoản quản trị cuối cùng"));
             // ===== CÁCH CŨ: Manual check và return (đã comment) =====
             //var isDeleted = await _userService.DeleteUsserAsync(id);
             //if (!isDeleted)
@@ -86,6 +117,9 @@ namespace Project.Api.Controllers
         [HttpPost("create-user")]
         public async Task<IActionResult> CreateUserAsync(UserCreateDto dto)
         {
+            if (await _db.Users.AnyAsync(x => x.UserName == dto.UserName ||
+                x.Email == dto.Email || x.PhoneNumber == dto.PhoneNumber))
+                return Conflict(ApiResponse<string>.Fail("Tên đăng nhập, email hoặc số điện thoại đã được sử dụng"));
             // ===== CÁCH CŨ: Manual check và return (đã comment) =====
             //var result = await _userService.CreateUserAsync(dto);
             //if (result == null)
@@ -94,8 +128,31 @@ namespace Project.Api.Controllers
 
             // ===== CÁCH MỚI: FluentValidation tự động validate, service throw exception nếu fail =====
             // FluentValidation sẽ tự động validate dto trước khi vào method này
-            var result = await _userService.CreateUserAsync(dto);
-            return Created("", ApiResponse<UserResponseDto>.Ok(result, "Create user succesfully"));
+            var rawToken = AuthTokenTools.NewToken();
+            UserResponseDto result;
+            await using (var transaction = await _db.Database.BeginTransactionAsync())
+            {
+                result = await _userService.CreateUserAsync(dto);
+                _db.EmailVerificationTokens.Add(new EmailVerificationToken
+                {
+                    UserId = result.Id, TokenHash = AuthTokenTools.Hash(rawToken),
+                    CreatedAt = DateTime.UtcNow, ExpiresAt = DateTime.UtcNow.AddHours(24)
+                });
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            var baseUrl = _configuration["Mail:PublicFrontendUrl"] ??
+                (_environment.IsDevelopment() ? "https://localhost:5173" :
+                    throw new InvalidOperationException("Missing public frontend URL"));
+            var verificationUrl = $"{baseUrl.TrimEnd('/')}/auth/verify-email#token={Uri.EscapeDataString(rawToken)}";
+            try { await _email.SendAsync(result.Email, verificationUrl); }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Could not send admin-created account verification: {ErrorType}", ex.GetType().Name);
+                return Created("", ApiResponse<UserResponseDto>.Ok(result,
+                    "Đã tạo tài khoản nhưng chưa gửi được email; hãy dùng chức năng gửi lại xác minh"));
+            }
+            return Created("", ApiResponse<UserResponseDto>.Ok(result, "Đã tạo tài khoản; cần xác minh email trước khi đăng nhập"));
         }
     }
 

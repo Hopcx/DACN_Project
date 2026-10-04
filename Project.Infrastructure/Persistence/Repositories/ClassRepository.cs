@@ -38,16 +38,9 @@ namespace Project.Infrastructure.Persistence.Repositories
 
         public async Task<Class> CreateClassAsync(Class @class)
         {
-            try
-            {
-                var created = _context.Classes.Add(@class).Entity;
-                await _context.SaveChangesAsync();
-                return created;
-            }
-            catch
-            {
-                return null;
-            }
+            var created = _context.Classes.Add(@class).Entity;
+            await _context.SaveChangesAsync();
+            return created;
         }
 
         public async Task<Class> UpdateClassAsync(int id, Class @class)
