@@ -33,6 +33,7 @@ services.AddSingleton<Microsoft.AspNetCore.Hosting.IWebHostEnvironment, SmokeWeb
 services.AddProjectAuthorization();
 services.AddApplication();
 services.AddInfrastructure(configuration);
+services.AddScoped<IExamVariantService, ExamVariantStore>();
 
 using var provider = services.BuildServiceProvider(validateScopes: true);
 using var firstScope = provider.CreateScope();
@@ -42,6 +43,7 @@ var serviceTypes = new[]
 {
     typeof(IClassExamScheduleService), typeof(IClassUserService),
     typeof(IExamActivityLogService), typeof(IExamDetailService),
+    typeof(IExamVariantService),
     typeof(IExamDetailQuestionService), typeof(ILogService),
     typeof(IUserPermissionService)
 };
@@ -56,7 +58,7 @@ var controllerTypes = new[]
     typeof(ExamDetailQuestionController), typeof(LogController),
     typeof(UserPermissionController), typeof(UserController),
     typeof(RoomController), typeof(SubmissionController)
-    , typeof(QuestionController), typeof(AnswerController)
+    , typeof(QuestionController), typeof(AnswerController), typeof(ExamController)
 };
 
 foreach (var controllerType in controllerTypes)

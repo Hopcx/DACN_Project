@@ -35,33 +35,15 @@ namespace Project.Api.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] ExamDetailCreateDto dto)
-        {
-            var result = await _service.CreateAsync(dto);
-            if (result == null)
-                return BadRequest(ApiResponse<string>.Fail("Tạo Exam detail thất bại"));
-
-            return Created("", ApiResponse<ExamDetailResponseDto>.Ok(result, "Tạo Exam detail thành công"));
-        }
+        public IActionResult Create([FromBody] ExamDetailCreateDto dto) =>
+            StatusCode(405, ApiResponse<string>.Fail("Dùng /web/exams/{id}/variants để ghi mã đề."));
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] ExamDetailCreateDto dto)
-        {
-            var result = await _service.UpdateAsync(id, dto);
-            if (result == null)
-                return NotFound(ApiResponse<string>.Fail("Exam detail không tồn tại"));
-
-            return Ok(ApiResponse<ExamDetailResponseDto>.Ok(result, "Cập nhật Exam detail thành công"));
-        }
+        public IActionResult Update(int id, [FromBody] ExamDetailCreateDto dto) =>
+            StatusCode(405, ApiResponse<string>.Fail("Dùng /web/exams/{id}/variants để ghi mã đề."));
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(int id)
-        {
-            var deleted = await _service.DeleteAsync(id);
-            if (!deleted)
-                return NotFound(ApiResponse<string>.Fail("Exam detail không tồn tại hoặc xóa thất bại"));
-
-            return Ok(ApiResponse<string>.Ok($"Xóa Exam detail với ID {id} thành công"));
-        }
+        public IActionResult Delete(int id) =>
+            StatusCode(405, ApiResponse<string>.Fail("Không hỗ trợ xóa mã đề qua CRUD rời."));
     }
 }
