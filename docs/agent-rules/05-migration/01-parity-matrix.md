@@ -1,5 +1,9 @@
 # Ma trận chức năng Testify → DACN
 
+## Task 08 tại checkout `dev/Hop` (2026-10-04)
+
+F14/F15 **IN_PROGRESS**. BE chuyển NumberOfRepeat/AllowViewResult/ScoreMethodId qua Exam DTO và lưu, giữ `MaximmumMark`; cấu hình được validate. Tạo/sửa mã đề cùng tập câu thủ công và ngẫu nhiên theo môn/mức độ trong transaction serializable; chặn trùng/thiếu câu và sửa mã đề đã công khai/có lượt thi. FE có màn danh sách, cấu hình và chi tiết mã đề qua API thật. Chưa có SQL fixture để xác minh transaction/concurrency, lịch sử đề sau publish hoặc chấm theo ScoreMethod; không đánh dấu VERIFIED. Không thêm migration.
+
 Mức bằng chứng: **CODE** có logic source đã xem; **DECLARED** mới thấy khai báo/route/model; **PARTIAL** có phần stub/thiếu rõ; không mức nào là “đã test runtime”. BE/FE đã đối chiếu source tại SHA trong README. **CODE** không có nghĩa chạy được; blocker chung B01/B02 và authorization xem audit. FE hầu hết chưa có nghiệp vụ ngoài placeholder auth/dashboard. Những hàng CODE phải có acceptance trước đánh dấu migrated.
 
 | ID | Feature / bằng chứng cũ | Mức | Module đích và acceptance | BE tại commit đối chiếu | FE tại commit đối chiếu |

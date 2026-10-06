@@ -28,6 +28,9 @@ namespace Project.Application.Services
                 Status = x.Status,
                 SubjectId = x.SubjectId,
                 NumberOfQuestions = x.NumberOfQuestions,
+                NumberOfRepeat = x.NumberOfRepeat,
+                AllowViewResult = x.AllowViewResult,
+                ScoreMethodId = x.ScoreMethodId,
                 MaximmumMark = x.MaximmumMark,
                 PassMark = x.PassMark,
                 Duration = x.Duration
@@ -48,6 +51,9 @@ namespace Project.Application.Services
                 Status = item.Status,
                 SubjectId = item.SubjectId,
                 NumberOfQuestions = item.NumberOfQuestions,
+                NumberOfRepeat = item.NumberOfRepeat,
+                AllowViewResult = item.AllowViewResult,
+                ScoreMethodId = item.ScoreMethodId,
                 MaximmumMark = item.MaximmumMark,
                 PassMark = item.PassMark,
                 Duration = item.Duration
@@ -56,13 +62,17 @@ namespace Project.Application.Services
 
         public async Task<ExamResponseDto?> CreateAsync(ExamCreateDto dto)
         {
+            Validate(dto);
             var entity = new Exam
             {
-                Name = dto.Name,
+                Name = dto.Name.Trim(),
                 Description = dto.Description,
-                Status = dto.Status ?? 0,
+                Status = dto.Status ?? 2,
                 SubjectId = dto.SubjectId,
                 NumberOfQuestions = dto.NumberOfQuestions,
+                NumberOfRepeat = dto.NumberOfRepeat,
+                AllowViewResult = dto.AllowViewResult,
+                ScoreMethodId = dto.ScoreMethodId,
                 MaximmumMark = dto.MaximmumMark,
                 PassMark = dto.PassMark,
                 Duration = dto.Duration
@@ -80,6 +90,9 @@ namespace Project.Application.Services
                 Status = created.Status,
                 SubjectId = created.SubjectId,
                 NumberOfQuestions = created.NumberOfQuestions,
+                NumberOfRepeat = created.NumberOfRepeat,
+                AllowViewResult = created.AllowViewResult,
+                ScoreMethodId = created.ScoreMethodId,
                 MaximmumMark = created.MaximmumMark,
                 PassMark = created.PassMark,
                 Duration = created.Duration
@@ -88,13 +101,17 @@ namespace Project.Application.Services
 
         public async Task<ExamResponseDto?> UpdateAsync(int id, ExamCreateDto dto)
         {
+            Validate(dto);
             var entity = new Exam
             {
-                Name = dto.Name,
+                Name = dto.Name.Trim(),
                 Description = dto.Description,
-                Status = dto.Status ?? 0,
+                Status = dto.Status ?? 2,
                 SubjectId = dto.SubjectId,
                 NumberOfQuestions = dto.NumberOfQuestions,
+                NumberOfRepeat = dto.NumberOfRepeat,
+                AllowViewResult = dto.AllowViewResult,
+                ScoreMethodId = dto.ScoreMethodId,
                 MaximmumMark = dto.MaximmumMark,
                 PassMark = dto.PassMark,
                 Duration = dto.Duration
@@ -112,6 +129,9 @@ namespace Project.Application.Services
                 Status = updated.Status,
                 SubjectId = updated.SubjectId,
                 NumberOfQuestions = updated.NumberOfQuestions,
+                NumberOfRepeat = updated.NumberOfRepeat,
+                AllowViewResult = updated.AllowViewResult,
+                ScoreMethodId = updated.ScoreMethodId,
                 MaximmumMark = updated.MaximmumMark,
                 PassMark = updated.PassMark,
                 Duration = updated.Duration
@@ -122,6 +142,16 @@ namespace Project.Application.Services
         {
             var deleted = await _repository.DeleteExamAsync(id);
             return deleted != null;
+        }
+
+        private static void Validate(ExamCreateDto dto)
+        {
+            if (string.IsNullOrWhiteSpace(dto.Name) || dto.SubjectId <= 0 ||
+                dto.NumberOfQuestions <= 0 || dto.NumberOfRepeat < 1 || dto.Duration <= 0 ||
+                !double.IsFinite(dto.MaximmumMark) || dto.MaximmumMark <= 0 ||
+                !double.IsFinite(dto.PassMark) || dto.PassMark <= 0 || dto.PassMark > dto.MaximmumMark ||
+                dto.ScoreMethodId < 1 || (dto.Status is not null and not 1 and not 2))
+                throw new ArgumentException("Cấu hình bài thi không hợp lệ.");
         }
     }
 }

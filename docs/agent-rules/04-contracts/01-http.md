@@ -1,5 +1,13 @@
 # HTTP contract: hiện tại và quy tắc phát triển
 
+## Task 08 — cấu hình bài thi và mã đề tại `dev/Hop`
+
+Các route dưới đây dùng `ExamManagement` (permission 1), envelope `ApiResponse`. `GET/POST /web/exams`, `GET/PUT/DELETE /web/exams/{id}` giữ tên JSON `maximmumMark`. Request/response nay gồm `numberOfRepeat`, `allowViewResult`, `scoreMethodId`; request cũ bỏ hai field đầu nhận mặc định lần lượt 1 và true. Tạo bài thi là trạng thái nháp 2; công khai trạng thái 1 chỉ khi có ít nhất một mã đề công khai đủ số câu và tổng điểm. Số câu, số lượt, duration, điểm tối đa/đạt phải hợp lệ; scoreMethodId có thể null, giá trị khác null phải tham chiếu bản ghi sẵn có. Không có thuật toán chấm mới.
+
+`GET /web/exams/subjects` trả môn đang hoạt động cho permission 1. `GET /web/exams/{id}/question-options` trả `{id,content,questionLevelId,questionLevelName}` của câu hoạt động cùng môn, không có đáp án. `GET /web/exams/{id}/variants` và `GET /web/exams/{id}/variants/{variantId}` trả mã đề cùng `questions: [{id,questionId,point}]`.
+
+`POST /web/exams/{id}/variants` và `PUT /web/exams/{id}/variants/{variantId}` nhận `{code,status,questionIds,randomSelections:[{questionLevelId,count}]}`; `questionLevelId` null nghĩa là mọi mức độ. Trạng thái 2 là nháp, 1 là công khai. Server chọn ngẫu nhiên trong câu hoạt động cùng môn, trừ các câu đã chọn trong request; số câu cuối phải đúng cấu hình, không trùng và điểm mỗi câu là `maximmumMark / numberOfQuestions`. Thiếu câu phù hợp trả 409; dữ liệu sai trả 400. Ghi mã đề và câu hỏi trong transaction. Mã đề đã công khai hoặc có lượt thi không được sửa. `POST/PUT/DELETE /web/exam-details` và `/web/exam-detail-questions` trả 405 để tránh ghi rời vượt validation; GET cũ còn đọc được. Không thêm schema/migration.
+
 ## Task 07 — ngân hàng câu hỏi tại `dev/Hop`
 
 `GET /web/questions` (policy `QuestionManagement`, permission 2) nhận `textSearch`, `subjectId`, `questionTypeId`, `questionLevelId`; ba ID lọc phải dương. Response `data` là mảng admin `QuestionResponseDto`, có `answers: [{id,content,isCorrect}]` và `isUsedInExam`. `GET /web/questions/{id}` cũng là admin projection. Không dùng hai response này cho student attempt.
