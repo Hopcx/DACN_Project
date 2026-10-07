@@ -14,13 +14,8 @@ namespace Project.Infrastructure.Persistence.Configurations
     {
         public void Configure(EntityTypeBuilder<Exam> entity)
         {
-            entity.HasIndex(e => e.ExamScheduleId);
             entity.HasIndex(e => e.ScoreMethodId);
             entity.HasIndex(e => e.SubjectId);
-
-            entity.HasOne(d => d.ExamSchedule)
-                  .WithMany(p => p.Exams)
-                  .HasForeignKey(d => d.ExamScheduleId);
 
             entity.HasOne(d => d.ScoreMethod)
                   .WithMany(p => p.Exams)

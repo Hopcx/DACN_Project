@@ -39,7 +39,7 @@ namespace Project.Domain.Entities
 
         public virtual ICollection<ClassExamSchedule> ClassExamSchedules { get; set; } = new List<ClassExamSchedule>();
 
-        public virtual ICollection<Exam> Exams { get; set; } = new List<Exam>();
+        public virtual Exam Exam { get; set; } = null!;
 
         public virtual Room? Room { get; set; }
 

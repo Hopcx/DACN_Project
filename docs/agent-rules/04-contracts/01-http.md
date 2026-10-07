@@ -1,5 +1,13 @@
 # HTTP contract: hiện tại và quy tắc phát triển
 
+## Task 09 — lịch thi tại checkout `dev/Hop` (2026-10-07)
+
+Quyết định bổ sung: `POST/PUT /web/exam-schedules` chỉ nhận `startTime` và `endTime` ISO UTC có `Z`; reject 400 nếu DateTimeKind không phải UTC. Lịch status=1 bị từ chối 409 nếu giao khoảng `[start,end)` trong cùng RoomId hoặc có học viên membership=1 ở các lớp gán của lịch khác giao giờ. Gán lớp qua `/web/class-exam-schedules` và duyệt học viên cũng kiểm overlap; các luồng ghi này lấy cùng `sp_getapplock` transaction-scope trên SQL Server để serialize request đồng thời. Lịch có DoingExam hoặc Submission từ chối đổi thời gian, exam, phòng, gán lớp; xóa mềm lịch này cũng bị từ chối. SQL Server E2E trên bản sao `ProjectDACN_Task04Task09_Test` xác nhận hai request tạo lịch cùng phòng trả 201/409, hai request gán lớp có học viên trùng giờ trả 201/409, lịch sau bắt đầu đúng giờ kết thúc lịch trước trả 201. Dữ liệu datetime2 cũ chưa rõ timezone; response không có offset được FE hiển thị như chưa rõ múi giờ. Migration `20261007145624_Task09ExamScheduleDirection` đã áp trên bản sao sau Task04; DB gốc `ProjectDACN` vẫn ở migration đầu.
+
+`GET /web/student/schedules` yêu cầu policy `Student` (level_id=4), lấy userId từ claim; trả `ApiResponse<List<{id,title,startTime,endTime,status,roomId,roomName,subjectName}>>`. Chỉ trả lịch hoạt động (`status=1`, theo `Testify.ExamScheduleRepository.GetSchedulesActive`) có ít nhất một lớp hoạt động với membership đã duyệt (`ClassUser.Status=1`) của chính user. Quyền xem lịch dựa vào gán lớp; `ExamSchedule.ExamId` nay có FK sang bài thi.
+
+`GET /web/exam-schedules/class-options` yêu cầu `ScheduleManagement` (permission 4), trả lớp hoạt động `{id,name,classCode}` cho màn quản lý. `POST/PUT /web/exam-schedules` giữ DTO hiện tại, thêm lỗi 400 nếu `startTime >= endTime`, thiếu thời điểm, `examId` không tồn tại/đã ngừng hoạt động, hoặc `roomId`/`subjectId` được gửi mà không tồn tại. Quyền CRUD `ClassExamSchedule` vẫn là permission 4. Hai màn FE `/admin/schedules` và `/student/schedules` hiện chỉ đọc API thật. Task09 có migration đổi chiều FK như trên.
+
 ## Task 08 — cấu hình bài thi và mã đề tại `dev/Hop`
 
 Các route dưới đây dùng `ExamManagement` (permission 1), envelope `ApiResponse`. `GET/POST /web/exams`, `GET/PUT/DELETE /web/exams/{id}` giữ tên JSON `maximmumMark`. Request/response nay gồm `numberOfRepeat`, `allowViewResult`, `scoreMethodId`; request cũ bỏ hai field đầu nhận mặc định lần lượt 1 và true. Tạo bài thi là trạng thái nháp 2; công khai trạng thái 1 chỉ khi có ít nhất một mã đề công khai đủ số câu và tổng điểm. Số câu, số lượt, duration, điểm tối đa/đạt phải hợp lệ; scoreMethodId có thể null, giá trị khác null phải tham chiếu bản ghi sẵn có. Không có thuật toán chấm mới.

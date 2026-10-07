@@ -43,13 +43,11 @@ namespace Project.Domain.Entities
 
         public DateTime? CreatedAt { get; set; }
 
-        public int? ExamScheduleId { get; set; }
-
         public virtual ICollection<ExamActivityLog> ExamActivityLogs { get; set; } = new List<ExamActivityLog>();
 
         public virtual ICollection<ExamDetail> ExamDetails { get; set; } = new List<ExamDetail>();
 
-        public virtual ExamSchedule? ExamSchedule { get; set; }
+        public virtual ICollection<ExamSchedule> ExamSchedules { get; set; } = new List<ExamSchedule>();
 
         public virtual ScoreMethod? ScoreMethod { get; set; }
 

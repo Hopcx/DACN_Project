@@ -1,5 +1,11 @@
 # Ma trận chức năng Testify → DACN
 
+## Task 12 rồi Task 09 tại checkout `dev/Hop` (2026-10-07)
+
+Quyết định tiếp theo: DB DACN thử nghiệm, chưa ETL Testify; Exam 1→n Schedule với `ExamSchedules.ExamId` là FK đích. API ghi lịch/gán lớp và duyệt membership nay lấy SQL Server transaction application lock, kiểm phòng/học viên theo `[start,end)`, từ chối đổi lịch/gán lớp sau DoingExam/Submission; chỉ chấp nhận UTC `Z` cho giờ ghi mới. FE đọc offset theo Asia/Ho_Chi_Minh và giữ nguyên chuỗi cũ chưa rõ zone. Preflight trên `ProjectDACN` cho thấy Exam/Schedule/attempt/submission rỗng và chỉ migration đầu đã apply. Đã sao lưu gốc và restore `ProjectDACN_Task04Task09_Test`; trên bản sao đã áp Task04 rồi Task09. SQL Server E2E trả 201/409 cho hai request cùng phòng và hai request gán lớp làm học viên trùng giờ; khoảng chạm biên trả 201. DB gốc chưa áp migration. F16/F17 vẫn IN_PROGRESS đến khi kiểm đủ các nhánh nghiệp vụ, đặc biệt lịch có lượt thi/submission.
+
+F16/F17 **IN_PROGRESS**. Task 12 lập [mapping/gate dữ liệu](12-data-readiness.md); chưa ETL Testify. Task 09 thêm validation thời gian/tham chiếu cho lịch, API class options theo permission 4 và API lịch học viên theo claim + membership đã duyệt. FE có màn quản lý đọc lịch/lớp đã gán và màn học viên đọc lịch qua API; chưa có giao diện ghi lịch/gán lớp. Bản sao DB đã qua migration và SQL concurrency E2E cho tạo lịch/gán lớp; chưa kiểm nhánh lịch có DoingExam/Submission. Xem contract mới trong `04-contracts/01-http.md`.
+
 ## Task 08 tại checkout `dev/Hop` (2026-10-04)
 
 F14/F15 **IN_PROGRESS**. BE chuyển NumberOfRepeat/AllowViewResult/ScoreMethodId qua Exam DTO và lưu, giữ `MaximmumMark`; cấu hình được validate. Tạo/sửa mã đề cùng tập câu thủ công và ngẫu nhiên theo môn/mức độ trong transaction serializable; chặn trùng/thiếu câu và sửa mã đề đã công khai/có lượt thi. FE có màn danh sách, cấu hình và chi tiết mã đề qua API thật. Chưa có SQL fixture để xác minh transaction/concurrency, lịch sử đề sau publish hoặc chấm theo ScoreMethod; không đánh dấu VERIFIED. Không thêm migration.
