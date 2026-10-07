@@ -14,8 +14,14 @@ namespace Project.Infrastructure.Persistence.Configurations
     {
         public void Configure(EntityTypeBuilder<ExamSchedule> entity)
         {
+            entity.HasIndex(e => e.ExamId);
             entity.HasIndex(e => e.RoomId);
             entity.HasIndex(e => e.SubjectId);
+
+            entity.HasOne(d => d.Exam)
+                  .WithMany(p => p.ExamSchedules)
+                  .HasForeignKey(d => d.ExamId)
+                  .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasOne(d => d.Room)
                   .WithMany(p => p.ExamSchedules)

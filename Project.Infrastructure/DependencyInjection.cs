@@ -37,6 +37,7 @@ namespace Project.Infrastructure
             services.AddScoped<IClassExamScheduleRepository, ClassExamScheduleRepository>();
             services.AddScoped<IClassUserRepository, ClassUserRepository>();
             services.AddScoped<ClassMembershipStore>();
+            services.AddScoped<ScheduleWriteGuard>();
             services.AddScoped<IExamRepository, ExamRepository>();
             services.AddScoped<IExamDetailRepository, ExamDetailRepository>();
             services.AddScoped<IExamDetailQuestionRepository, ExamDetailQuestionRepository>();

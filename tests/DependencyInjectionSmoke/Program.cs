@@ -57,7 +57,8 @@ var controllerTypes = new[]
     typeof(ExamActivityLogController), typeof(ExamDetailController),
     typeof(ExamDetailQuestionController), typeof(LogController),
     typeof(UserPermissionController), typeof(UserController),
-    typeof(RoomController), typeof(SubmissionController)
+    typeof(RoomController), typeof(SubmissionController),
+    typeof(ExamScheduleController), typeof(StudentScheduleController)
     , typeof(QuestionController), typeof(AnswerController), typeof(ExamController)
 };
 
