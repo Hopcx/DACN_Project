@@ -85,6 +85,7 @@ namespace Project.Api.Controllers
             MembershipOutcome.InactiveClass => Conflict(ApiResponse<string>.Fail("Lớp không hoạt động")),
             MembershipOutcome.Duplicate => Conflict(ApiResponse<string>.Fail("Học viên đã có trong lớp")),
             MembershipOutcome.Full => Conflict(ApiResponse<string>.Fail("Lớp đã đủ sĩ số")),
+            MembershipOutcome.ScheduleConflict => Conflict(ApiResponse<string>.Fail("Học viên đã có lịch thi giao nhau ở lớp khác")),
             _ => Conflict(ApiResponse<string>.Fail("Trạng thái thành viên không hợp lệ"))
         };
 
