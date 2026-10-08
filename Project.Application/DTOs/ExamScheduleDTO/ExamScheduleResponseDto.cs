@@ -9,6 +9,8 @@ namespace Project.Application.DTOs.ExamScheduleDTO
         public string? Title { get; set; }
         public DateTime StartTime { get; set; }
         public DateTime EndTime { get; set; }
+        public string TimeZoneStatus { get; set; } = "unknown";
+        public bool HasAttempts { get; set; }
         public string? Description { get; set; }
         public byte? Status { get; set; }
         public int? SubjectId { get; set; }

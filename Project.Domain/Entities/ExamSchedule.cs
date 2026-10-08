@@ -21,6 +21,9 @@ namespace Project.Domain.Entities
 
         public DateTime EndTime { get; set; }
 
+        // SQL datetime2 loses DateTimeKind. Existing rows remain unknown until verified.
+        public bool IsTimeUtc { get; set; }
+
         public string? Description { get; set; }
 
         public byte? Status { get; set; }

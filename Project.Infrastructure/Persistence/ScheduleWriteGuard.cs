@@ -27,7 +27,8 @@ public class ScheduleWriteGuard
         DateTime startUtc, DateTime endUtc) => roomId == null
         ? Task.FromResult(false)
         : _db.ExamSchedules.AnyAsync(x => x.Id != excludedScheduleId && x.Status == 1 &&
-            x.RoomId == roomId && x.StartTime < endUtc && startUtc < x.EndTime);
+            x.RoomId == roomId && (!x.IsTimeUtc ||
+                (x.StartTime < endUtc && startUtc < x.EndTime)));
 
     public async Task<bool> StudentConflictAsync(int? excludedScheduleId,
         DateTime startUtc, DateTime endUtc, IReadOnlyCollection<int> classIds)
@@ -37,7 +38,8 @@ public class ScheduleWriteGuard
             .Select(x => x.UserId);
         return await _db.ClassExamSchedules.AnyAsync(link =>
             link.ExamScheduleId != excludedScheduleId && link.ExamSchedule.Status == 1 &&
-            link.ExamSchedule.StartTime < endUtc && startUtc < link.ExamSchedule.EndTime &&
+            (!link.ExamSchedule.IsTimeUtc ||
+                (link.ExamSchedule.StartTime < endUtc && startUtc < link.ExamSchedule.EndTime)) &&
             link.Class.ClassUsers.Any(member => member.Status == 1 && candidateUsers.Contains(member.UserId)));
     }
 
@@ -45,13 +47,15 @@ public class ScheduleWriteGuard
     {
         var targetSchedules = await _db.ClassExamSchedules.AsNoTracking()
             .Where(link => link.ClassId == classId && link.ExamSchedule.Status == 1)
-            .Select(link => new { link.ExamScheduleId, link.ExamSchedule.StartTime, link.ExamSchedule.EndTime })
+            .Select(link => new { link.ExamScheduleId, link.ExamSchedule.StartTime,
+                link.ExamSchedule.EndTime, link.ExamSchedule.IsTimeUtc })
             .ToListAsync();
         foreach (var target in targetSchedules)
         {
             if (await _db.ClassExamSchedules.AnyAsync(link =>
                 link.ExamScheduleId != target.ExamScheduleId && link.ExamSchedule.Status == 1 &&
-                link.ExamSchedule.StartTime < target.EndTime && target.StartTime < link.ExamSchedule.EndTime &&
+                (!link.ExamSchedule.IsTimeUtc || !target.IsTimeUtc ||
+                    (link.ExamSchedule.StartTime < target.EndTime && target.StartTime < link.ExamSchedule.EndTime)) &&
                 link.Class.ClassUsers.Any(member => member.UserId == userId && member.Status == 1)))
                 return true;
         }
