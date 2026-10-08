@@ -14,6 +14,7 @@ namespace Project.Infrastructure.Persistence.Configurations
     {
         public void Configure(EntityTypeBuilder<ExamSchedule> entity)
         {
+            entity.Property(e => e.IsTimeUtc).HasDefaultValue(false);
             entity.HasIndex(e => e.ExamId);
             entity.HasIndex(e => e.RoomId);
             entity.HasIndex(e => e.SubjectId);

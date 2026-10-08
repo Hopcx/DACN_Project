@@ -64,6 +64,8 @@ namespace Project.Api.Controllers
             var link = await _db.ClassExamSchedules.FindAsync(id);
             if (link == null)
                 return NotFound(ApiResponse<string>.Fail("Class exam schedule không tồn tại"));
+            if (await _db.ExamSchedules.AnyAsync(x => x.Id == link.ExamScheduleId && !x.IsTimeUtc))
+                return Conflict(ApiResponse<string>.Fail("Lịch cũ chưa xác định múi giờ; hãy tạo lịch mới"));
             if ((link.ClassId != dto.ClassId || link.ExamScheduleId != dto.ExamScheduleId) &&
                 await _guard.HasAttemptsAsync(link.ExamScheduleId))
                 return Conflict(ApiResponse<string>.Fail("Lịch cũ đã có lượt thi hoặc bài nộp"));
@@ -82,6 +84,8 @@ namespace Project.Api.Controllers
             await _guard.AcquireAsync();
             var link = await _db.ClassExamSchedules.FindAsync(id);
             if (link == null) return NotFound(ApiResponse<string>.Fail("Class exam schedule không tồn tại"));
+            if (await _db.ExamSchedules.AnyAsync(x => x.Id == link.ExamScheduleId && !x.IsTimeUtc))
+                return Conflict(ApiResponse<string>.Fail("Lịch cũ chưa xác định múi giờ; hãy tạo lịch mới"));
             if (await _guard.HasAttemptsAsync(link.ExamScheduleId))
                 return Conflict(ApiResponse<string>.Fail("Lịch đã có lượt thi hoặc bài nộp"));
             _db.ClassExamSchedules.Remove(link);
@@ -95,6 +99,8 @@ namespace Project.Api.Controllers
             var schedule = await _db.ExamSchedules.AsNoTracking().FirstOrDefaultAsync(x => x.Id == dto.ExamScheduleId);
             if (schedule == null || schedule.Status == 255)
                 return NotFound(ApiResponse<string>.Fail("Lịch thi không tồn tại"));
+            if (!schedule.IsTimeUtc)
+                return Conflict(ApiResponse<string>.Fail("Lịch cũ chưa xác định múi giờ; hãy tạo lịch mới"));
             if (!await _db.Classes.AnyAsync(x => x.Id == dto.ClassId && x.Status == 1))
                 return BadRequest(ApiResponse<string>.Fail("Lớp không hoạt động hoặc không tồn tại"));
             if (await _guard.HasAttemptsAsync(schedule.Id))
