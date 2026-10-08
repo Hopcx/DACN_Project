@@ -14,16 +14,26 @@ namespace Project.Api.Controllers
     [Microsoft.AspNetCore.Authorization.Authorize(Policy = "ScheduleManagement")]
     public class ExamScheduleController : ControllerBase
     {
-        private readonly IExamScheduleService _service;
         private readonly ProjectDACNDbContext _db;
         private readonly ScheduleWriteGuard _guard;
 
-        public ExamScheduleController(IExamScheduleService service, ProjectDACNDbContext db, ScheduleWriteGuard guard)
+        public ExamScheduleController(ProjectDACNDbContext db, ScheduleWriteGuard guard)
         {
-            _service = service;
             _db = db;
             _guard = guard;
         }
+
+        [HttpGet("exam-options")]
+        public async Task<IActionResult> GetExamOptions() => Ok(ApiResponse<object>.Ok(
+            await _db.Exams.AsNoTracking().Where(x => x.Status != 255)
+                .OrderBy(x => x.Name).ThenBy(x => x.Id)
+                .Select(x => new { x.Id, x.Name, x.SubjectId, x.Status }).ToListAsync()));
+
+        [HttpGet("room-options")]
+        public async Task<IActionResult> GetRoomOptions() => Ok(ApiResponse<object>.Ok(
+            await _db.Rooms.AsNoTracking().Where(x => x.Status != false)
+                .OrderBy(x => x.Name).ThenBy(x => x.Id)
+                .Select(x => new { x.Id, x.Name, x.Capacity }).ToListAsync()));
 
         [HttpGet("class-options")]
         public async Task<IActionResult> GetClassOptions()
@@ -53,18 +63,28 @@ namespace Project.Api.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAllExamSchedules()
         {
-            var result = await _service.GetAllExamSchedulesAsync();
+            var rows = await _db.ExamSchedules.AsNoTracking()
+                .OrderBy(x => x.StartTime).ThenBy(x => x.Id)
+                .Select(x => new { Schedule = x, HasAttempts =
+                    _db.DoingExams.Any(d => d.ExamScheduleId == x.Id) ||
+                    _db.Submissions.Any(s => s.ExamScheduleId == x.Id) })
+                .ToListAsync();
+            var result = rows.Select(x => ToDto(x.Schedule, x.HasAttempts)).ToList();
             return Ok(ApiResponse<List<ExamScheduleResponseDto>>.Ok(result));
         }
 
         [HttpGet("{id}")]
         public async Task<IActionResult> GetExamScheduleById(int id)
         {
-            var result = await _service.GetExamScheduleByIdAsync(id);
-            if (result == null)
+            var row = await _db.ExamSchedules.AsNoTracking().Where(x => x.Id == id)
+                .Select(x => new { Schedule = x, HasAttempts =
+                    _db.DoingExams.Any(d => d.ExamScheduleId == x.Id) ||
+                    _db.Submissions.Any(s => s.ExamScheduleId == x.Id) })
+                .FirstOrDefaultAsync();
+            if (row == null)
                 return NotFound(ApiResponse<string>.Fail("Exam schedule không tồn tại"));
 
-            return Ok(ApiResponse<ExamScheduleResponseDto>.Ok(result));
+            return Ok(ApiResponse<ExamScheduleResponseDto>.Ok(ToDto(row.Schedule, row.HasAttempts)));
         }
 
         [HttpPost]
@@ -79,7 +99,7 @@ namespace Project.Api.Controllers
             var schedule = new ExamSchedule { ExamId = dto.ExamId, Title = dto.Title,
                 StartTime = dto.StartTime, EndTime = dto.EndTime, Description = dto.Description,
                 Status = dto.Status, SubjectId = dto.SubjectId, RoomId = dto.RoomId,
-                CreatedAt = DateTime.UtcNow };
+                CreatedAt = DateTime.UtcNow, IsTimeUtc = true };
             _db.ExamSchedules.Add(schedule);
             await _db.SaveChangesAsync();
             await transaction.CommitAsync();
@@ -96,6 +116,8 @@ namespace Project.Api.Controllers
             var schedule = await _db.ExamSchedules.FindAsync(id);
             if (schedule == null)
                 return NotFound(ApiResponse<string>.Fail("Exam schedule không tồn tại"));
+            if (!schedule.IsTimeUtc)
+                return Conflict(ApiResponse<string>.Fail("Lịch cũ chưa xác định múi giờ; hãy tạo lịch mới"));
             if (await _guard.HasAttemptsAsync(id) &&
                 (schedule.StartTime != dto.StartTime || schedule.EndTime != dto.EndTime ||
                  schedule.ExamId != dto.ExamId || schedule.RoomId != dto.RoomId || dto.Status == 255))
@@ -113,7 +135,8 @@ namespace Project.Api.Controllers
             schedule.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
             await transaction.CommitAsync();
-            return Ok(ApiResponse<ExamScheduleResponseDto>.Ok(ToDto(schedule), "Cập nhật Exam schedule thành công"));
+            return Ok(ApiResponse<ExamScheduleResponseDto>.Ok(ToDto(schedule,
+                await _guard.HasAttemptsAsync(id)), "Cập nhật Exam schedule thành công"));
         }
 
         [HttpDelete("{id}")]
@@ -123,6 +146,8 @@ namespace Project.Api.Controllers
             await _guard.AcquireAsync();
             var schedule = await _db.ExamSchedules.FindAsync(id);
             if (schedule == null) return NotFound(ApiResponse<string>.Fail("Exam schedule không tồn tại"));
+            if (!schedule.IsTimeUtc)
+                return Conflict(ApiResponse<string>.Fail("Lịch cũ chưa xác định múi giờ; hãy tạo lịch mới"));
             if (await _guard.HasAttemptsAsync(id))
                 return Conflict(ApiResponse<string>.Fail("Lịch đã có lượt thi hoặc bài nộp"));
             schedule.Status = 255;
@@ -131,10 +156,12 @@ namespace Project.Api.Controllers
             return Ok(ApiResponse<string>.Ok($"Xóa Exam schedule với ID {id} thành công"));
         }
 
-        private static ExamScheduleResponseDto ToDto(ExamSchedule x) => new()
-        { Id = x.Id, ExamId = x.ExamId, Title = x.Title, StartTime = x.StartTime,
-          EndTime = x.EndTime, Description = x.Description, Status = x.Status,
-          SubjectId = x.SubjectId, RoomId = x.RoomId };
+        private static ExamScheduleResponseDto ToDto(ExamSchedule x, bool hasAttempts = false) => new()
+        { Id = x.Id, ExamId = x.ExamId, Title = x.Title,
+          StartTime = x.IsTimeUtc ? DateTime.SpecifyKind(x.StartTime, DateTimeKind.Utc) : x.StartTime,
+          EndTime = x.IsTimeUtc ? DateTime.SpecifyKind(x.EndTime, DateTimeKind.Utc) : x.EndTime,
+          TimeZoneStatus = x.IsTimeUtc ? "utc" : "unknown", HasAttempts = hasAttempts,
+          Description = x.Description, Status = x.Status, SubjectId = x.SubjectId, RoomId = x.RoomId };
     }
 
     public record ScheduleClassOptionDto(int Id, string Name, string ClassCode);

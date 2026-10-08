@@ -25,14 +25,20 @@ public class StudentScheduleController : ControllerBase
                 link.Class.Status == 1 && link.Class.ClassUsers.Any(member =>
                     member.UserId == userId && member.Status == 1)))
             .OrderBy(schedule => schedule.StartTime).ThenBy(schedule => schedule.Id)
-            .Select(schedule => new StudentScheduleDto(schedule.Id, schedule.Title,
-                schedule.StartTime, schedule.EndTime, schedule.Status, schedule.RoomId,
-                schedule.Room != null ? schedule.Room.Name : null,
-                schedule.Subject != null ? schedule.Subject.Name : null))
+            .Select(schedule => new {
+                Schedule = schedule,
+                RoomName = schedule.Room != null ? schedule.Room.Name : null,
+                SubjectName = schedule.Subject != null ? schedule.Subject.Name : null
+            })
             .ToListAsync();
-        return Ok(ApiResponse<List<StudentScheduleDto>>.Ok(rows));
+        var result = rows.Select(x => new StudentScheduleDto(x.Schedule.Id, x.Schedule.Title,
+            x.Schedule.IsTimeUtc ? DateTime.SpecifyKind(x.Schedule.StartTime, DateTimeKind.Utc) : x.Schedule.StartTime,
+            x.Schedule.IsTimeUtc ? DateTime.SpecifyKind(x.Schedule.EndTime, DateTimeKind.Utc) : x.Schedule.EndTime,
+            x.Schedule.IsTimeUtc ? "utc" : "unknown", x.Schedule.Status, x.Schedule.RoomId,
+            x.RoomName, x.SubjectName)).ToList();
+        return Ok(ApiResponse<List<StudentScheduleDto>>.Ok(result));
     }
 }
 
 public record StudentScheduleDto(int Id, string? Title, DateTime StartTime, DateTime EndTime,
-    byte? Status, int? RoomId, string? RoomName, string? SubjectName);
+    string TimeZoneStatus, byte? Status, int? RoomId, string? RoomName, string? SubjectName);

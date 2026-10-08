@@ -63,13 +63,16 @@ $userId = [Guid]::Parse([string]$login.Payload.data.userId)
 $me = Invoke-WebRequest -Uri "$BaseUrl/web/auth/me" -Method Get -SkipCertificateCheck -SkipHttpErrorCheck `
     -Headers @{ Authorization = "Bearer $accessToken" }
 if ([int]$me.StatusCode -ne 200) { throw 'Authenticated /me failed.' }
+$withoutPermission = Invoke-WebRequest -Uri "$BaseUrl/web/exam-schedules" -Method Get `
+    -SkipCertificateCheck -SkipHttpErrorCheck -Headers @{ Authorization = "Bearer $accessToken" }
+if ([int]$withoutPermission.StatusCode -ne 403) { throw 'Student without schedule permission was not rejected.' }
 $oldUserUnverified = SqlRead 'SELECT COUNT(*) FROM dbo.Users WHERE EmailVerifiedAt IS NULL AND Id IN (SELECT Id FROM ProjectDACN.dbo.Users);'
 $newUserVerified = SqlRead "SELECT COUNT(*) FROM dbo.Users WHERE Id = '$userId' AND EmailVerifiedAt IS NOT NULL;"
 $originHasNewUser = (sqlcmd -S . -d ProjectDACN -E -No -C -b -W -h -1 -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM dbo.Users WHERE Id = '$userId';" | Out-String).Trim()
 if ($oldUserUnverified -ne '1' -or $newUserVerified -ne '1' -or $originHasNewUser -ne '0') {
     throw 'Auth row reconciliation or source isolation failed.'
 }
-Write-Output 'AUTH_REGISTER_VERIFY_LOGIN_ME=PASS;OLD_USER_UNVERIFIED=1;ORIGIN_NEW_USER=0'
+Write-Output 'AUTH_REGISTER_VERIFY_LOGIN_ME=PASS;SCHEDULE_PERMISSION_403=PASS;OLD_USER_UNVERIFIED=1;ORIGIN_NEW_USER=0'
 
 if ((SqlRead 'SELECT COUNT(*) FROM dbo.Permissions WHERE Id = 4;') -ne '1') { throw 'Schedule permission lookup missing.' }
 SqlWrite "INSERT INTO dbo.UserPermissions (UserId,PermissionId) VALUES ('$userId',4);" | Out-Null
@@ -85,8 +88,13 @@ IF @subjectId IS NULL THROW 51102, 'No subject fixture', 1;
 INSERT INTO dbo.Exams (Name,SubjectId,NumberOfQuestions,NumberOfRepeat,Status,MaximmumMark,PassMark,Duration)
 VALUES (N'Task09 QA $tag',@subjectId,1,1,2,10,5,30);
 DECLARE @examId int = CONVERT(int,SCOPE_IDENTITY());
+INSERT INTO dbo.Exams (Name,SubjectId,NumberOfQuestions,NumberOfRepeat,Status,MaximmumMark,PassMark,Duration)
+VALUES (N'Task09 QA second $tag',@subjectId,1,1,2,10,5,30);
+DECLARE @examId2 int = CONVERT(int,SCOPE_IDENTITY());
 INSERT INTO dbo.Rooms (Name,Capacity,Address,Status) VALUES (N'Task09 QA $tag',30,N'Test only',1);
 DECLARE @roomId int = CONVERT(int,SCOPE_IDENTITY());
+INSERT INTO dbo.Rooms (Name,Capacity,Address,Status) VALUES (N'Task09 QA second $tag',30,N'Test only',1);
+DECLARE @roomId2 int = CONVERT(int,SCOPE_IDENTITY());
 INSERT INTO dbo.Classes (Name,ClassCode,Capacity,TeacherId,SubjectId,Status)
 VALUES (N'Task09 A $tag',N'QA-A-$tag',30,'$userId',@subjectId,1);
 DECLARE @classA int = CONVERT(int,SCOPE_IDENTITY());
@@ -94,12 +102,13 @@ INSERT INTO dbo.Classes (Name,ClassCode,Capacity,TeacherId,SubjectId,Status)
 VALUES (N'Task09 B $tag',N'QA-B-$tag',30,'$userId',@subjectId,1);
 DECLARE @classB int = CONVERT(int,SCOPE_IDENTITY());
 INSERT INTO dbo.ClassUsers (ClassId,UserId,Status) VALUES (@classA,'$userId',1),(@classB,'$userId',1);
-SELECT CONCAT(@examId,',',@roomId,',',@classA,',',@classB);
+SELECT CONCAT(@examId,',',@examId2,',',@roomId,',',@roomId2,',',@classA,',',@classB);
 "@
 $fixtureIds = $fixture.Split(',')
-if ($fixtureIds.Count -ne 4) { throw 'Fixture IDs not returned.' }
-$examId = [int]$fixtureIds[0]; $roomId = [int]$fixtureIds[1]
-$classA = [int]$fixtureIds[2]; $classB = [int]$fixtureIds[3]
+if ($fixtureIds.Count -ne 6) { throw 'Fixture IDs not returned.' }
+$examId = [int]$fixtureIds[0]; $examId2 = [int]$fixtureIds[1]
+$roomId = [int]$fixtureIds[2]; $roomId2 = [int]$fixtureIds[3]
+$classA = [int]$fixtureIds[4]; $classB = [int]$fixtureIds[5]
 
 $handler = [System.Net.Http.HttpClientHandler]::new()
 $handler.ServerCertificateCustomValidationCallback = [System.Net.Http.HttpClientHandler]::DangerousAcceptAnyServerCertificateValidator
@@ -114,7 +123,32 @@ function PostAssignment([int]$classId, [int]$scheduleId) {
     $json = ConvertTo-Json @{ classId = $classId; examScheduleId = $scheduleId } -Compress
     return $http.PostAsync("$BaseUrl/web/class-exam-schedules", [System.Net.Http.StringContent]::new($json,[Text.Encoding]::UTF8,'application/json'))
 }
-function ResponseData($response) { return ($response.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json).data }
+function ResponseData($response) { return ($response.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json -DateKind String).data }
+function SendSchedule([string]$method, [int]$scheduleId, [int]$exam, [Nullable[int]]$room,
+    [string]$start, [string]$end, [int]$status = 1) {
+    $json = ConvertTo-Json @{ examId = $exam; title = 'Task09 acceptance';
+        startTime = $start; endTime = $end; status = $status; roomId = $room } -Compress
+    $content = [System.Net.Http.StringContent]::new($json,[Text.Encoding]::UTF8,'application/json')
+    if ($method -eq 'POST') { return $http.PostAsync("$BaseUrl/web/exam-schedules", $content).GetAwaiter().GetResult() }
+    return $http.PutAsync("$BaseUrl/web/exam-schedules/$scheduleId", $content).GetAwaiter().GetResult()
+}
+function RequireStatus($response, [int]$expected, [string]$label) {
+    if ([int]$response.StatusCode -ne $expected) {
+        throw "$label expected $expected, got $([int]$response.StatusCode)"
+    }
+}
+$examOptions = $http.GetAsync("$BaseUrl/web/exam-schedules/exam-options").GetAwaiter().GetResult()
+$roomOptions = $http.GetAsync("$BaseUrl/web/exam-schedules/room-options").GetAwaiter().GetResult()
+$classOptions = $http.GetAsync("$BaseUrl/web/exam-schedules/class-options").GetAwaiter().GetResult()
+RequireStatus $examOptions 200 'Exam options'
+RequireStatus $roomOptions 200 'Room options'
+RequireStatus $classOptions 200 'Class options'
+if (-not (@(ResponseData $examOptions).id -contains $examId) -or
+    -not (@(ResponseData $roomOptions).id -contains $roomId) -or
+    -not (@(ResponseData $classOptions).id -contains $classA)) {
+    throw 'Schedule form options did not include fixture values.'
+}
+Write-Output 'SCHEDULE_FORM_OPTIONS=PASS'
 
 $roomStart = '2027-01-01T08:00:00Z'; $roomEnd = '2027-01-01T09:00:00Z'
 $room1 = PostSchedule $roomStart $roomEnd $roomId
@@ -126,6 +160,39 @@ if ([int]$touch.StatusCode -ne 201) { throw "Touching interval rejected: $([int]
 $twoSchedules = SqlRead "SELECT COUNT(*) FROM dbo.ExamSchedules WHERE ExamId = $examId;"
 if ($twoSchedules -ne '2') { throw 'One exam to two schedules fixture failed.' }
 Write-Output 'ROOM_CONCURRENT=201,409;TOUCHING_INTERVAL=201;ONE_EXAM_TWO_SCHEDULES=PASS'
+$newId = [int](SqlRead "SELECT TOP (1) Id FROM dbo.ExamSchedules WHERE ExamId=$examId ORDER BY Id;")
+$reloaded = $http.GetAsync("$BaseUrl/web/exam-schedules/$newId").GetAwaiter().GetResult()
+RequireStatus $reloaded 200 'Reload UTC schedule'
+$newRow = ResponseData $reloaded
+if ($newRow.timeZoneStatus -ne 'utc' -or $newRow.startTime -notmatch 'Z$' -or
+    (SqlRead "SELECT COUNT(*) FROM dbo.ExamSchedules WHERE Id=$newId AND IsTimeUtc=1;") -ne '1') {
+    throw "UTC round-trip failed: status=$($newRow.timeZoneStatus), start=$($newRow.startTime), id=$newId"
+}
+$legacyId = SqlRead 'SELECT TOP (1) s.Id FROM dbo.ExamSchedules s WHERE s.IsTimeUtc=0 AND NOT EXISTS (SELECT 1 FROM dbo.DoingExams d WHERE d.ExamScheduleId=s.Id) AND NOT EXISTS (SELECT 1 FROM dbo.Submissions sub WHERE sub.ExamScheduleId=s.Id) ORDER BY s.Id;'
+if ($legacyId) {
+    $legacy = $http.GetAsync("$BaseUrl/web/exam-schedules/$legacyId").GetAwaiter().GetResult()
+    RequireStatus $legacy 200 'Reload unknown schedule'
+    $legacyRow = ResponseData $legacy
+    if ($legacyRow.timeZoneStatus -ne 'unknown' -or $legacyRow.startTime -match 'Z$') {
+        throw 'Legacy datetime2 was inferred as UTC.'
+    }
+    RequireStatus (SendSchedule PUT ([int]$legacyId) ([int]$legacyRow.examId) $legacyRow.roomId "$($legacyRow.startTime)Z" "$($legacyRow.endTime)Z") 409 'Unknown-zone schedule update'
+    RequireStatus ((PostAssignment $classA ([int]$legacyId)).GetAwaiter().GetResult()) 409 'Unknown-zone class assignment'
+    RequireStatus ($http.DeleteAsync("$BaseUrl/web/exam-schedules/$legacyId").GetAwaiter().GetResult()) 409 'Unknown-zone schedule soft delete'
+    $legacyLinkId = SqlRead 'SELECT TOP (1) l.Id FROM dbo.ClassExamSchedule l JOIN dbo.ExamSchedules s ON s.Id=l.ExamScheduleId WHERE s.IsTimeUtc=0 AND NOT EXISTS (SELECT 1 FROM dbo.DoingExams d WHERE d.ExamScheduleId=s.Id) AND NOT EXISTS (SELECT 1 FROM dbo.Submissions sub WHERE sub.ExamScheduleId=s.Id) ORDER BY l.Id;'
+    if ($legacyLinkId) {
+        RequireStatus ($http.DeleteAsync("$BaseUrl/web/class-exam-schedules/$legacyLinkId").GetAwaiter().GetResult()) 409 'Unknown-zone class unassignment'
+        $legacyLinkJson = ConvertTo-Json @{ classId = $classA; examScheduleId = [int]$legacyId } -Compress
+        RequireStatus ($http.PutAsync("$BaseUrl/web/class-exam-schedules/$legacyLinkId", [System.Net.Http.StringContent]::new($legacyLinkJson,[Text.Encoding]::UTF8,'application/json')).GetAwaiter().GetResult()) 409 'Unknown-zone class assignment update'
+        if ((SqlRead "SELECT COUNT(*) FROM dbo.ClassExamSchedule WHERE Id=$legacyLinkId;") -ne '1') {
+            throw 'Unknown-zone class assignment changed after rejected request.'
+        }
+    }
+    if ((SqlRead "SELECT COUNT(*) FROM dbo.ExamSchedules WHERE Id=$legacyId AND Status=$($legacyRow.status);") -ne '1') {
+        throw 'Unknown-zone schedule changed after rejected request.'
+    }
+}
+Write-Output 'UTC_SQL_ROUNDTRIP_AND_LEGACY_UNKNOWN_LOCK=PASS'
 
 $studentA = (PostSchedule '2027-01-02T08:00:00Z' '2027-01-02T09:00:00Z' $null).GetAwaiter().GetResult()
 $studentB = (PostSchedule '2027-01-02T08:00:00Z' '2027-01-02T09:00:00Z' $null).GetAwaiter().GetResult()
@@ -147,15 +214,67 @@ $assignedLink = (SqlRead "SELECT TOP (1) CONCAT(Id,',',ExamScheduleId) FROM dbo.
 if ($assignedLink.Count -ne 2) { throw 'Assigned schedule fixture missing.' }
 $linkId = [int]$assignedLink[0]; $lockedScheduleId = [int]$assignedLink[1]
 SqlWrite "INSERT INTO dbo.DoingExams (UserId,ExamId,ExamScheduleId,StartTime) VALUES ('$userId',$examId,$lockedScheduleId,'2027-01-02T08:00:00');" | Out-Null
-$changedTime = ConvertTo-Json @{ examId = $examId; title = 'Task09 QA'; startTime = '2027-01-02T08:30:00Z'
-    endTime = '2027-01-02T09:30:00Z'; status = 1; roomId = $null } -Compress
-$lockedUpdate = $http.PutAsync("$BaseUrl/web/exam-schedules/$lockedScheduleId",
-    [System.Net.Http.StringContent]::new($changedTime,[Text.Encoding]::UTF8,'application/json')).GetAwaiter().GetResult()
-$lockedUnassign = $http.DeleteAsync("$BaseUrl/web/class-exam-schedules/$linkId").GetAwaiter().GetResult()
-if ([int]$lockedUpdate.StatusCode -ne 409 -or [int]$lockedUnassign.StatusCode -ne 409) {
-    throw "Attempted schedule was mutable: update=$([int]$lockedUpdate.StatusCode), unassign=$([int]$lockedUnassign.StatusCode)"
+$lockedBefore = SqlRead "SELECT CONCAT(ExamId,',',ISNULL(CONVERT(varchar(20),RoomId),'NULL'),',',CONVERT(varchar(33),StartTime,126),',',CONVERT(varchar(33),EndTime,126),',',Status) FROM dbo.ExamSchedules WHERE Id=$lockedScheduleId;"
+RequireStatus (SendSchedule PUT $lockedScheduleId $examId $null '2027-01-02T08:30:00Z' '2027-01-02T09:30:00Z') 409 'DoingExam time change'
+RequireStatus (SendSchedule PUT $lockedScheduleId $examId $roomId2 '2027-01-02T08:00:00Z' '2027-01-02T09:00:00Z') 409 'DoingExam room change'
+RequireStatus (SendSchedule PUT $lockedScheduleId $examId2 $null '2027-01-02T08:00:00Z' '2027-01-02T09:00:00Z') 409 'DoingExam exam change'
+RequireStatus ((PostAssignment $classB $lockedScheduleId).GetAwaiter().GetResult()) 409 'DoingExam class assignment'
+RequireStatus ($http.DeleteAsync("$BaseUrl/web/class-exam-schedules/$linkId").GetAwaiter().GetResult()) 409 'DoingExam class unassignment'
+RequireStatus ($http.DeleteAsync("$BaseUrl/web/exam-schedules/$lockedScheduleId").GetAwaiter().GetResult()) 409 'DoingExam soft delete'
+$lockedAfter = SqlRead "SELECT CONCAT(ExamId,',',ISNULL(CONVERT(varchar(20),RoomId),'NULL'),',',CONVERT(varchar(33),StartTime,126),',',CONVERT(varchar(33),EndTime,126),',',Status) FROM dbo.ExamSchedules WHERE Id=$lockedScheduleId;"
+if ($lockedBefore -ne $lockedAfter -or (SqlRead "SELECT COUNT(*) FROM dbo.ClassExamSchedule WHERE Id=$linkId;") -ne '1') {
+    throw 'DoingExam rejection changed persisted schedule or assignment.'
 }
-Write-Output 'ATTEMPTED_SCHEDULE_UPDATE_AND_UNASSIGN=409,409'
+Write-Output 'DOING_EXAM_MUTATIONS=409;PERSISTED_DATA_UNCHANGED=PASS'
+
+$editable = SendSchedule POST 0 $examId $roomId2 '2027-02-01T08:00:00Z' '2027-02-01T09:00:00Z'
+RequireStatus $editable 201 'Create editable schedule'
+$editableId = [int](ResponseData $editable).id
+$editableLink = (PostAssignment $classA $editableId).GetAwaiter().GetResult()
+RequireStatus $editableLink 201 'Assign editable schedule'
+$editableLinkId = [int](ResponseData $editableLink).id
+RequireStatus (SendSchedule PUT $editableId $examId2 $roomId '2027-02-01T10:00:00Z' '2027-02-01T11:00:00Z') 200 'Update time/exam/room without attempts'
+$editableReload = $http.GetAsync("$BaseUrl/web/exam-schedules/$editableId").GetAwaiter().GetResult()
+RequireStatus $editableReload 200 'Reload edited schedule'
+$editableRow = ResponseData $editableReload
+if ($editableRow.examId -ne $examId2 -or $editableRow.roomId -ne $roomId -or
+    $editableRow.startTime -ne '2027-02-01T10:00:00Z' -or $editableRow.timeZoneStatus -ne 'utc' -or
+    $editableRow.hasAttempts -ne $false) { throw 'Editable schedule did not round-trip through SQL.' }
+RequireStatus ($http.DeleteAsync("$BaseUrl/web/class-exam-schedules/$editableLinkId").GetAwaiter().GetResult()) 200 'Unassign without attempts'
+RequireStatus ($http.DeleteAsync("$BaseUrl/web/exam-schedules/$editableId").GetAwaiter().GetResult()) 200 'Soft delete without attempts'
+if ((SqlRead "SELECT COUNT(*) FROM dbo.ClassExamSchedule WHERE Id=$editableLinkId;") -ne '0' -or
+    (SqlRead "SELECT COUNT(*) FROM dbo.ExamSchedules WHERE Id=$editableId AND Status=255 AND IsTimeUtc=1;") -ne '1') {
+    throw 'Allowed writes did not persist as expected.'
+}
+Write-Output 'NO_ATTEMPT_CREATE_UPDATE_ASSIGN_UNASSIGN_DELETE=PASS;UTC_RELOAD=PASS'
+
+$submissionSchedule = SendSchedule POST 0 $examId $roomId2 '2027-02-02T08:00:00Z' '2027-02-02T09:00:00Z'
+RequireStatus $submissionSchedule 201 'Create submission schedule'
+$submissionScheduleId = [int](ResponseData $submissionSchedule).id
+$submissionLink = (PostAssignment $classA $submissionScheduleId).GetAwaiter().GetResult()
+RequireStatus $submissionLink 201 'Assign submission schedule'
+$submissionLinkId = [int](ResponseData $submissionLink).id
+$detailId = SqlWrite @"
+INSERT INTO dbo.ExamDetails (ExamId,Code,Status,CreateDate,CreateBy,UpdateDate,UpdateBy)
+VALUES ($examId,N'QA-$tag',1,'2027-02-02T07:00:00','$userId','2027-02-02T07:00:00','$userId');
+SELECT CONVERT(int,SCOPE_IDENTITY());
+"@
+SqlWrite "INSERT INTO dbo.Submissions (UserId,ExamDetailId,ExamScheduleId,SubmitTime,TimeTaken,TotalMark,IsPassed,UnAnswered,Answered,Status) VALUES ('$userId',$detailId,$submissionScheduleId,'2027-02-02T08:30:00','00:30:00',8,1,0,1,1);" | Out-Null
+$submissionBefore = SqlRead "SELECT CONCAT(ExamId,',',RoomId,',',CONVERT(varchar(33),StartTime,126),',',CONVERT(varchar(33),EndTime,126),',',Status) FROM dbo.ExamSchedules WHERE Id=$submissionScheduleId;"
+RequireStatus (SendSchedule PUT $submissionScheduleId $examId $roomId2 '2027-02-02T08:30:00Z' '2027-02-02T09:30:00Z') 409 'Submission time change'
+RequireStatus (SendSchedule PUT $submissionScheduleId $examId $roomId '2027-02-02T08:00:00Z' '2027-02-02T09:00:00Z') 409 'Submission room change'
+RequireStatus (SendSchedule PUT $submissionScheduleId $examId2 $roomId2 '2027-02-02T08:00:00Z' '2027-02-02T09:00:00Z') 409 'Submission exam change'
+RequireStatus ((PostAssignment $classB $submissionScheduleId).GetAwaiter().GetResult()) 409 'Submission class assignment'
+RequireStatus ($http.DeleteAsync("$BaseUrl/web/class-exam-schedules/$submissionLinkId").GetAwaiter().GetResult()) 409 'Submission class unassignment'
+RequireStatus ($http.DeleteAsync("$BaseUrl/web/exam-schedules/$submissionScheduleId").GetAwaiter().GetResult()) 409 'Submission soft delete'
+$submissionAfter = SqlRead "SELECT CONCAT(ExamId,',',RoomId,',',CONVERT(varchar(33),StartTime,126),',',CONVERT(varchar(33),EndTime,126),',',Status) FROM dbo.ExamSchedules WHERE Id=$submissionScheduleId;"
+$submissionReload = ResponseData ($http.GetAsync("$BaseUrl/web/exam-schedules/$submissionScheduleId").GetAwaiter().GetResult())
+if ($submissionBefore -ne $submissionAfter -or $submissionReload.hasAttempts -ne $true -or
+    (SqlRead "SELECT COUNT(*) FROM dbo.ClassExamSchedule WHERE Id=$submissionLinkId;") -ne '1' -or
+    (SqlRead "SELECT COUNT(*) FROM dbo.Submissions WHERE ExamScheduleId=$submissionScheduleId;") -ne '1') {
+    throw 'Submission rejection changed persisted schedule, assignment or submission.'
+}
+Write-Output 'SUBMISSION_MUTATIONS=409;PERSISTED_DATA_UNCHANGED=PASS'
 
 $refresh = AuthPost 'refresh' @{}
 if ($refresh.Status -ne 200 -or -not $refresh.Payload.data.accessToken) { throw 'Refresh failed.' }
