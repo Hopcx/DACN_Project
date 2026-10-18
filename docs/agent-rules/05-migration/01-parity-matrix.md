@@ -1,5 +1,23 @@
 # Ma trận chức năng Testify → DACN
 
+## Task11/Task13 — kết quả và báo cáo lượt DACN mới, 2026-10-18
+
+| Feature | Trạng thái | Bằng chứng và giới hạn |
+|---|---|---|
+| F20 Kết quả/lịch sử | IN_PROGRESS | API `GET /web/attempts/mine` và FE lịch sử riêng đã thêm. SQL copy fixture 2 học viên/5 lượt: list chỉ 4 lượt của chính học viên, phân trang 2, detail người khác 404, kết quả ẩn null cả list/detail. Dữ liệu Testify cũ chưa đối soát; chưa có review đáp án hoặc chính sách release chi tiết. Kiểm Chrome bổ sung ghi ở báo cáo nghiệm thu. |
+| F22 Thống kê/phổ điểm | IN_PROGRESS | API admin chỉ lấy `ExamAttempts` mới; SQL copy fixture 5 lượt, 4 đã chốt, 1 đang làm, 1 timeout, 1 ẩn, 2 đạt; điểm 2/4/6/8 cho trung bình 5 và tỷ lệ đạt 50%. Filter exam/class/subject, phân trang, permission 403 và options đạt qua API. Chrome → Vite → API → SQL copy hiển thị đúng 5 lượt và chỉ số admin. Chưa có đối soát legacy hoặc hủy attempt. |
+
+
+## Task10 nghiệm thu bản sao — 2026-10-18
+
+| Feature | Trạng thái | Bằng chứng mới / còn thiếu |
+|---|---|---|
+| F17 Lịch học viên | IN_PROGRESS | Chrome → Vite → API → SQL bản sao đã đi từ lịch vào bài, reload, nộp, xem kết quả được phép và mở lịch sử/URL trực tiếp với kết quả bị ẩn. Chưa đối soát dữ liệu lịch sử timezone unknown và toàn bộ trạng thái lịch có bài cũ. |
+| F18 Lượt làm bài | IN_PROGRESS | API/SQL bản sao đạt start đồng thời, cap `NumberOfRepeat` là tổng lượt, membership, lịch sớm/hết/unknown, snapshot bất biến, lựa chọn ngoài snapshot, save revision đồng thời, owner, timeout và thu hồi membership. Chrome đạt lưu/khôi phục. Worker chốt 8 lượt không cần request và chốt 1 lượt sau API restart; lượt snapshot hỏng được log riêng. Đã kiểm đồng hồ chính xác một tick trước/đúng/sau deadline ở code cô lập và request gửi trước nhưng xử lý sau hạn trên SQL; chưa kiểm đầy đủ mã đề nhiều biến thể và dữ liệu legacy có lượt cũ. |
+| F19 Nộp/chấm | IN_PROGRESS | API/SQL đạt nộp lặp một kết quả, các ca single/multi đúng, thiếu, thừa, bỏ trống, tổng 4.52, ngưỡng 1.004 trước làm tròn, ẩn kết quả và timeout tự động từ draft. Submit và sweep chạy đồng thời giữ một submission; kiểm lại sau sweep và restart không đổi kết quả. Chrome đạt kết quả và thời lượng khi AllowViewResult=true. Browser/API/SQL đạt ẩn kết quả sau nộp, lịch sử, URL trực tiếp và reload. Raw 1.005/1.015 → lưu 1.00/1.02, đạt theo raw; quyết định decimal ToEven đã chốt. Race submit gửi trước hạn nhưng chờ khóa qua hạn và worker chỉ tạo một submission. Chưa chứng minh hai HTTP request cùng tick, chưa đối soát lượt Testify cũ hoặc nối báo cáo/admin Submission cũ. |
+
+Migrations `20261018053153_Task10ExamAttempts` và `20261018063239_Task10TimeoutAndDuration` chỉ áp trên `ProjectDACN_Task04Task09_Test`; DB gốc vẫn history 1 và không có bảng ExamAttempts. Các dòng trạng thái 2026-10-11 dưới đây là lịch sử trước triển khai Task10.
+
 ## Trạng thái hiện tại — 2026-10-11
 
 Các mục theo ngày bên dưới và bảng baseline mô tả lịch sử; ưu tiên bằng chứng hiện tại ở mục này.

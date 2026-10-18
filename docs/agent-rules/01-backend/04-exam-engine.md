@@ -1,5 +1,9 @@
 # BE — engine làm bài và chấm điểm
 
+## Trạng thái Task10 hiện hành — 2026-10-18
+
+Luồng attempt/snapshot/server grading và worker timeout cho lượt DACN mới đã triển khai. Quy tắc điểm **đã chốt**: tập đáp án phải khớp chính xác, cộng bằng `decimal`, so `PassMark` với tổng chưa làm tròn, sau đó `MidpointRounding.ToEven` tổng về hai chữ số để lưu/hiển thị. Các đoạn `PROPOSED` và `AwayFromZero` bên dưới là thiết kế baseline cũ, không áp dụng cho lượt mới. Giữ điểm Testify lịch sử; Task12 liệt kê sai khác số học (ví dụ 1.015: Testify 1.01, DACN 1.02) trong đối soát. Xem [contract hiện hành](../04-contracts/02-exam-api.md) và [nghiệm thu](../05-migration/13-task09-task10-acceptance.md).
+
 ## FACT — BE mới chưa có engine này
 
 Có DoingExam/Submission/AnswerSubmission entities và CRUD. SubmissionService nhận điểm, pass flag, user và giờ nộp từ DTO; chưa có StartAttempt/SaveDraft/Submit idempotent, snapshot hoặc worker finalize. Không được dùng CRUD hiện tại làm student submit. Thiết kế bên dưới là phần phải bổ sung theo parity và các quyết định nghiệp vụ còn OPEN.

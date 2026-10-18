@@ -378,6 +378,97 @@ namespace Project.Infrastructure.Migrations
                     b.ToTable("ExamActivityLogs");
                 });
 
+            modelBuilder.Entity("Project.Domain.Entities.ExamAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("AllowViewResult")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("DeadlineUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DraftJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ExamDetailId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ExamId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ExamScheduleId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("FinishedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<double>("PassMark")
+                        .HasColumnType("float");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExamDetailId");
+
+                    b.HasIndex("ExamId");
+
+                    b.HasIndex("ExamScheduleId");
+
+                    b.HasIndex("UserId", "ExamScheduleId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ExamAttempts_Open")
+                        .HasFilter("[State] = 'inProgress'");
+
+                    b.ToTable("ExamAttempts", (string)null);
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.ExamAttemptSubmission", b =>
+                {
+                    b.Property<Guid>("ExamAttemptId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AnswersJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsPassed")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("SubmittedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("TimeTakenSeconds")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("TotalMark")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("ExamAttemptId");
+
+                    b.ToTable("ExamAttemptSubmissions", (string)null);
+                });
+
             modelBuilder.Entity("Project.Domain.Entities.ExamDetail", b =>
                 {
                     b.Property<int>("Id")
@@ -1202,6 +1293,44 @@ namespace Project.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Project.Domain.Entities.ExamAttempt", b =>
+                {
+                    b.HasOne("Project.Domain.Entities.ExamDetail", null)
+                        .WithMany()
+                        .HasForeignKey("ExamDetailId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Project.Domain.Entities.Exam", null)
+                        .WithMany()
+                        .HasForeignKey("ExamId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Project.Domain.Entities.ExamSchedule", null)
+                        .WithMany()
+                        .HasForeignKey("ExamScheduleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Project.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.ExamAttemptSubmission", b =>
+                {
+                    b.HasOne("Project.Domain.Entities.ExamAttempt", "Attempt")
+                        .WithOne("Submission")
+                        .HasForeignKey("Project.Domain.Entities.ExamAttemptSubmission", "ExamAttemptId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Attempt");
+                });
+
             modelBuilder.Entity("Project.Domain.Entities.ExamDetail", b =>
                 {
                     b.HasOne("Project.Domain.Entities.Exam", "Exam")
@@ -1367,6 +1496,11 @@ namespace Project.Infrastructure.Migrations
                     b.Navigation("ExamDetails");
 
                     b.Navigation("ExamSchedules");
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.ExamAttempt", b =>
+                {
+                    b.Navigation("Submission");
                 });
 
             modelBuilder.Entity("Project.Domain.Entities.ExamDetail", b =>

@@ -31,18 +31,30 @@ public class StudentScheduleController : ControllerBase
                 SubjectName = schedule.Subject != null ? schedule.Subject.Name : null
             })
             .ToListAsync();
+        var scheduleIds = rows.Select(x => x.Schedule.Id).ToArray();
+        var lastAttempts = await _db.ExamAttempts.AsNoTracking()
+            .Where(x => x.UserId == userId && scheduleIds.Contains(x.ExamScheduleId))
+            .OrderByDescending(x => x.StartedAtUtc)
+            .Select(x => new { x.Id, x.ExamScheduleId, x.State, x.DeadlineUtc })
+            .ToListAsync();
+        var latestBySchedule = lastAttempts.GroupBy(x => x.ExamScheduleId)
+            .ToDictionary(x => x.Key, x => x.First());
         var serverNow = DateTime.UtcNow;
-        var result = rows.Select(x => new StudentScheduleDto(x.Schedule.Id, x.Schedule.Title,
+        var result = rows.Select(x => {
+            latestBySchedule.TryGetValue(x.Schedule.Id, out var last);
+            return new StudentScheduleDto(x.Schedule.Id, x.Schedule.Title,
             x.Schedule.IsTimeUtc ? DateTime.SpecifyKind(x.Schedule.StartTime, DateTimeKind.Utc) : x.Schedule.StartTime,
             x.Schedule.IsTimeUtc ? DateTime.SpecifyKind(x.Schedule.EndTime, DateTimeKind.Utc) : x.Schedule.EndTime,
             x.Schedule.IsTimeUtc ? "utc" : "unknown", x.Schedule.Status, x.Schedule.RoomId,
             x.RoomName, x.SubjectName, serverNow,
             !x.Schedule.IsTimeUtc ? "unknown" : serverNow < x.Schedule.StartTime ? "upcoming" :
-                serverNow < x.Schedule.EndTime ? "open" : "ended")).ToList();
+                serverNow < x.Schedule.EndTime ? "open" : "ended",
+            last?.Id, last == null ? null : last.State == "inProgress" && serverNow >= last.DeadlineUtc ? "timedOut" : last.State);
+        }).ToList();
         return Ok(ApiResponse<List<StudentScheduleDto>>.Ok(result));
     }
 }
 
 public record StudentScheduleDto(int Id, string? Title, DateTime StartTime, DateTime EndTime,
     string TimeZoneStatus, byte? Status, int? RoomId, string? RoomName, string? SubjectName,
-    DateTime ServerNow, string ScheduleState);
+    DateTime ServerNow, string ScheduleState, Guid? LatestAttemptId, string? LatestAttemptState);

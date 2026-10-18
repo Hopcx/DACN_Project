@@ -64,5 +64,6 @@ public class ScheduleWriteGuard
 
     public async Task<bool> HasAttemptsAsync(int scheduleId) =>
         await _db.DoingExams.AnyAsync(x => x.ExamScheduleId == scheduleId) ||
-        await _db.Submissions.AnyAsync(x => x.ExamScheduleId == scheduleId);
+        await _db.Submissions.AnyAsync(x => x.ExamScheduleId == scheduleId) ||
+        await _db.ExamAttempts.AnyAsync(x => x.ExamScheduleId == scheduleId);
 }

@@ -1,5 +1,9 @@
 # Task 12 — kiểm kê dữ liệu trước đổi schema (2026-10-07)
 
+## Hậu kiểm Task10 timeout trên bản sao — 2026-10-18
+
+`ProjectDACN_Task04Task09_Test` đã áp thêm `20261018063239_Task10TimeoutAndDuration` sau `20261018053153_Task10ExamAttempts`. SQL hậu kiểm: history 6 migration, migration mới là hàng cuối; `ExamAttempts.PassMark float NOT NULL`, `ExamAttemptSubmissions.TimeTakenSeconds bigint NULL`; sau dọn fixture hai bảng đều 0 hàng. `ProjectDACN` gốc chỉ đọc: history 1, không có `dbo.ExamAttempts`. Chi tiết phép thử ở [báo cáo nghiệm thu](13-task09-task10-acceptance.md). Các số history 5 ở mục ngày trước bên dưới là ảnh chụp trước migration timeout, không phải trạng thái hiện tại.
+
 ## Bằng chứng tại checkout
 
 BE `dev/Hop` tại `0496f8b813dd872b806ceef43efc6319b6d9385a`; FE `dev/Hop` tại `968d40cd2e460026d5585b97a8a9d482dee5cc62`. Đã kiểm source và DB local `ProjectDACN` bằng Windows Authentication; không dùng credential trong export Testify.
@@ -70,6 +74,10 @@ API chạy với connection string trỏ đích bản sao. Trên SQL Server, hai
 Không có quyền truy cập hộp thư của user gốc; không backfill `EmailVerifiedAt`. Luồng Task04 được thử với Student QA riêng qua register → nhận mail trong development maildrop → verify → login → `/me` → refresh → logout; JWT sau logout trả 401. User QA không xuất hiện trong `ProjectDACN` gốc. Login của user gốc chưa được nghiệm thu. Script E2E là [`tests/Task04Task09CopySmoke.ps1`](../../../tests/Task04Task09CopySmoke.ps1). Nhánh Submission và timezone của dữ liệu lịch sử vẫn cần fixture/dữ liệu nguồn thích hợp; chưa ETL Testify hoặc áp migration trên DB gốc.
 
 Đối soát cuối: DB thử có 8 Users (1 user gốc `EmailVerifiedAt=NULL`, 1 QA chưa verify do một lần test gặp rate limit 429), 1 Subject, 4 Exams, 16 ExamSchedules, 4 ClassExamSchedule, 1 DoingExam thử, 0 Submission, 2 JWT blacklist; orphan schedule = 0, cả 4 Exam đều có ít nhất 2 lịch. FK mới enabled và trusted. DB gốc vẫn có đúng 1 migration đầu, 1 User, 1 Subject, 0 Exam/Schedule và FK cũ. Các hàng QA là dữ liệu nghiệm thu trong bản sao, không phải dữ liệu Testify.
+
+## Task10 trên bản sao — 2026-10-18
+
+Preflight copy: history 4, DoingExams 12, Submissions 4. Migration `20261018053153_Task10ExamAttempts` đã tạo và áp chỉ trên `ProjectDACN_Task04Task09_Test`; hai bảng mới rỗng sau khi dọn fixture API/browser. History copy nay 5; schedules 74. DB gốc `ProjectDACN` vẫn history 1 và không có bảng ExamAttempts. Chi tiết phép thử và giới hạn tại [báo cáo](13-task09-task10-acceptance.md). Dữ liệu legacy có attempt/submission cần đối soát trước khi cho học viên đó start trên cùng lịch; API từ chối với mã `LEGACY_ATTEMPT_RECONCILIATION_REQUIRED`.
 
 ## Cập nhật nghiệm thu 2026-10-11
 
