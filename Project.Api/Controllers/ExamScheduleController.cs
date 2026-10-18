@@ -67,7 +67,8 @@ namespace Project.Api.Controllers
                 .OrderBy(x => x.StartTime).ThenBy(x => x.Id)
                 .Select(x => new { Schedule = x, HasAttempts =
                     _db.DoingExams.Any(d => d.ExamScheduleId == x.Id) ||
-                    _db.Submissions.Any(s => s.ExamScheduleId == x.Id) })
+                    _db.Submissions.Any(s => s.ExamScheduleId == x.Id) ||
+                    _db.ExamAttempts.Any(a => a.ExamScheduleId == x.Id) })
                 .ToListAsync();
             var result = rows.Select(x => ToDto(x.Schedule, x.HasAttempts)).ToList();
             return Ok(ApiResponse<List<ExamScheduleResponseDto>>.Ok(result));
@@ -79,7 +80,8 @@ namespace Project.Api.Controllers
             var row = await _db.ExamSchedules.AsNoTracking().Where(x => x.Id == id)
                 .Select(x => new { Schedule = x, HasAttempts =
                     _db.DoingExams.Any(d => d.ExamScheduleId == x.Id) ||
-                    _db.Submissions.Any(s => s.ExamScheduleId == x.Id) })
+                    _db.Submissions.Any(s => s.ExamScheduleId == x.Id) ||
+                    _db.ExamAttempts.Any(a => a.ExamScheduleId == x.Id) })
                 .FirstOrDefaultAsync();
             if (row == null)
                 return NotFound(ApiResponse<string>.Fail("Exam schedule không tồn tại"));

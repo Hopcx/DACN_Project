@@ -55,9 +55,11 @@ namespace Project.Api
                 // ===== CÁCH MỚI: Có FluentValidation và AutoMapper =====
                 builder.Services.AddApplication();
                 builder.Services.AddInfrastructure(builder.Configuration);
+                builder.Services.AddScoped<AttemptFinalizer>();
                 builder.Services.AddScoped<Project.Application.Interfaces.Services.IExamVariantService, Project.Api.Services.ExamVariantStore>();
                 builder.Services.AddSingleton<IVerificationEmailSender, VerificationEmailSender>();
                 builder.Services.AddHostedService<ExpiredAccessTokenCleanupService>();
+                builder.Services.AddHostedService<ExpiredAttemptFinalizerService>();
                 builder.Services.AddScoped<AuthCsrfFilter>();
                 builder.Services.AddAntiforgery(options =>
                 {
