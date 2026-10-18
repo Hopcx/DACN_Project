@@ -31,14 +31,18 @@ public class StudentScheduleController : ControllerBase
                 SubjectName = schedule.Subject != null ? schedule.Subject.Name : null
             })
             .ToListAsync();
+        var serverNow = DateTime.UtcNow;
         var result = rows.Select(x => new StudentScheduleDto(x.Schedule.Id, x.Schedule.Title,
             x.Schedule.IsTimeUtc ? DateTime.SpecifyKind(x.Schedule.StartTime, DateTimeKind.Utc) : x.Schedule.StartTime,
             x.Schedule.IsTimeUtc ? DateTime.SpecifyKind(x.Schedule.EndTime, DateTimeKind.Utc) : x.Schedule.EndTime,
             x.Schedule.IsTimeUtc ? "utc" : "unknown", x.Schedule.Status, x.Schedule.RoomId,
-            x.RoomName, x.SubjectName)).ToList();
+            x.RoomName, x.SubjectName, serverNow,
+            !x.Schedule.IsTimeUtc ? "unknown" : serverNow < x.Schedule.StartTime ? "upcoming" :
+                serverNow < x.Schedule.EndTime ? "open" : "ended")).ToList();
         return Ok(ApiResponse<List<StudentScheduleDto>>.Ok(result));
     }
 }
 
 public record StudentScheduleDto(int Id, string? Title, DateTime StartTime, DateTime EndTime,
-    string TimeZoneStatus, byte? Status, int? RoomId, string? RoomName, string? SubjectName);
+    string TimeZoneStatus, byte? Status, int? RoomId, string? RoomName, string? SubjectName,
+    DateTime ServerNow, string ScheduleState);

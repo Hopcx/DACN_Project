@@ -71,6 +71,12 @@ Không có quyền truy cập hộp thư của user gốc; không backfill `Emai
 
 Đối soát cuối: DB thử có 8 Users (1 user gốc `EmailVerifiedAt=NULL`, 1 QA chưa verify do một lần test gặp rate limit 429), 1 Subject, 4 Exams, 16 ExamSchedules, 4 ClassExamSchedule, 1 DoingExam thử, 0 Submission, 2 JWT blacklist; orphan schedule = 0, cả 4 Exam đều có ít nhất 2 lịch. FK mới enabled và trusted. DB gốc vẫn có đúng 1 migration đầu, 1 User, 1 Subject, 0 Exam/Schedule và FK cũ. Các hàng QA là dữ liệu nghiệm thu trong bản sao, không phải dữ liệu Testify.
 
+## Cập nhật nghiệm thu 2026-10-11
+
+Đã hoàn tất ba ca SQL/API duyệt membership đồng thời: lịch giao nhau 200/409, lịch chạm biên 200/200, tranh chỗ cuối 200/409. Membership bị từ chối vẫn pending, không vượt capacity; đã dọn fixture lớp/lịch. Phần độc lập Task10 thêm trạng thái giờ lịch theo server và đã kiểm Chrome/Vite/API/SQL, gồm membership chưa duyệt/không thuộc lớp và đồng hồ browser bị thay đổi. Chi tiết fixture/ID/trước-sau/lệnh chạy tại [báo cáo nghiệm thu](13-task09-task10-acceptance.md).
+
+Không tạo hoặc áp migration lần này. Copy giữ 4 migration, 74 lịch, 16 unknown, orphan 0 sau dọn fixture; các tài khoản QA được giữ trong bản sao có thể tạo lại. DB gốc chỉ đọc để đối soát: history 1, Users 1, Exams/Schedules 0. Task10.md hiện đã có và đã đọc lại; deadline/cách tính và phạm vi lượt đang chờ lựa chọn của người dùng. Đã thêm factory snapshot/DTO học viên/validate draft cùng test cô lập; chưa nối persistence/API. Không coi kiểm UI trạng thái lịch hay factory là nghiệm thu start/save/submit.
+
 ## Tiếp tục Task 09 trên bản sao (2026-10-08)
 
 Sau khi kiểm history 3 migration và `SELECT DB_NAME()`, đã áp **chỉ trên** `ProjectDACN_Task04Task09_Test` migration `20261008144059_Task09ScheduleUtcProvenance`. SQL generated thêm `ExamSchedules.IsTimeUtc bit NOT NULL DEFAULT 0`; 16 hàng lịch đã có giữ nguyên timestamp và nhận `0`. Lịch mới đặt `1`; API đọc từ SQL `datetime2` rồi gắn `DateTimeKind.Utc` để JSON có `Z`, kèm `timeZoneStatus="utc"`. Hàng cũ trả `"unknown"` không có offset, FE không chuyển đổi; PUT/gán lớp vào lịch này trả 409. Lịch unknown cùng phòng hoặc có học viên chung được xem là xung đột tiềm tàng, vì không thể so sánh chính xác giờ. `Down` của migration từ chối nếu còn hàng `IsTimeUtc=1`, tránh mất provenance; khôi phục bản sao/backup là đường rollback khi đã có lịch UTC mới.
