@@ -18,6 +18,9 @@ using Project.Domain.Interfaces.ADO;
 using Project.Domain.Interfaces.Repositories;
 using Project.Infrastructure;
 
+AttemptSnapshotSmoke.Run();
+if (args.Contains("--attempt-snapshot")) return;
+
 var configuration = new ConfigurationBuilder()
     .AddInMemoryCollection(new Dictionary<string, string?>
     {
