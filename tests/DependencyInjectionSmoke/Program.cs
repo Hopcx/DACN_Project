@@ -19,6 +19,7 @@ using Project.Domain.Interfaces.Repositories;
 using Project.Infrastructure;
 
 AttemptSnapshotSmoke.Run();
+AttemptScoringSmoke.Run();
 if (args.Contains("--attempt-snapshot")) return;
 
 var configuration = new ConfigurationBuilder()

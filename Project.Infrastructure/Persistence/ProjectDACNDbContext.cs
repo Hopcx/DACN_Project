@@ -30,6 +30,8 @@ namespace Project.Infrastructure.Persistence
         public virtual DbSet<ClassUser> ClassUsers { get; set; }
 
         public virtual DbSet<DoingExam> DoingExams { get; set; }
+        public DbSet<ExamAttempt> ExamAttempts { get; set; }
+        public DbSet<ExamAttemptSubmission> ExamAttemptSubmissions { get; set; }
 
         public virtual DbSet<Exam> Exams { get; set; }
 

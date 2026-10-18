@@ -8,6 +8,15 @@ internal static class AttemptSnapshotSmoke
 {
     public static void Run()
     {
+        var at = new DateTime(2026, 10, 18, 0, 0, 0, DateTimeKind.Utc);
+        Check(AttemptTiming.CanStart(at, at, at.AddMinutes(1)), "Schedule start boundary must be inclusive.");
+        Check(!AttemptTiming.CanStart(at.AddMinutes(1), at, at.AddMinutes(1)), "Schedule end boundary must be exclusive.");
+        Check(AttemptTiming.Deadline(at, 30, at.AddMinutes(10)) == at.AddMinutes(10), "Schedule end must cap deadline.");
+        Check(AttemptTiming.Deadline(at, 5, at.AddMinutes(10)) == at.AddMinutes(5), "Duration must cap deadline.");
+        var deadline = at.AddMinutes(5);
+        Check(!AttemptTiming.IsExpired(deadline.AddTicks(-1), deadline), "One tick before deadline must remain open.");
+        Check(AttemptTiming.IsExpired(deadline, deadline), "Exact deadline must be expired.");
+        Check(AttemptTiming.IsExpired(deadline.AddTicks(1), deadline), "One tick after deadline must be expired.");
         var exam = new Exam { Id = 1, SubjectId = 1, Name = "Snapshot QA", Status = 1, NumberOfQuestions = 2 };
         var variant = new ExamDetail { Id = 2, ExamId = 1, Code = "QA", Status = 1 };
         for (var i = 1; i <= 2; i++)
