@@ -1,5 +1,18 @@
 # Ma trận chức năng Testify → DACN
 
+## Trạng thái hiện tại — 2026-10-11
+
+Các mục theo ngày bên dưới và bảng baseline mô tả lịch sử; ưu tiên bằng chứng hiện tại ở mục này.
+
+| Feature | Trạng thái | Bằng chứng và phần còn thiếu |
+|---|---|---|
+| F16 Lịch/gán lớp | IN_PROGRESS | SQL Server bản sao đã đạt thêm duyệt membership đồng thời: lịch giao nhau 200/409, chạm biên 200/200, tranh chỗ cuối 200/409; membership bị từ chối vẫn pending, sĩ số không vượt capacity. Fixture lớp/lịch đã dọn. Khoảng trống concurrency approval đã đóng; còn đối soát dữ liệu lịch sử unknown để nghiệm thu parity toàn bộ. |
+| F17 Lịch học viên | IN_PROGRESS | API bổ sung serverNow/scheduleState; FE hiển thị trước/trong/sau giờ lịch và unknown. Chrome → Vite → API → SQL đạt lọc membership đã duyệt, 4 trạng thái, giả giờ máy khách và reload sau đổi fixture. Chưa có trạng thái attempt/nộp/kết quả. |
+| F18 Lượt làm bài | IN_PROGRESS | Đã đọc Task10.md hiện có; thêm factory snapshot, DTO học viên an toàn và validate draft ở mức code thuần. Chưa có persistence/API Start/Resume/Save, revision concurrency, deadline hoặc trang làm bài. Cách tính/phạm vi lượt và deadline đang chờ chốt; chưa nghiệm thu luồng attempt trên SQL. |
+| F19 Nộp/chấm điểm | OPEN | Chưa có finalize idempotent/giao dịch, chấm điểm hoặc kiểm release đáp án. Quy tắc multiple-choice/rounding/ngưỡng đạt còn OPEN; không dùng CRUD Submission nhận điểm từ client. |
+
+Không tạo/áp migration trong lần này; chỉ DB bản sao được ghi fixture. Không đánh dấu VERIFIED từ các test trạng thái lịch. Báo cáo chi tiết tại BE: docs/agent-rules/05-migration/13-task09-task10-acceptance.md.
+
 ## Task 12 rồi Task 09 tại checkout `dev/Hop` (2026-10-07)
 
 Quyết định tiếp theo: DB DACN thử nghiệm, chưa ETL Testify; Exam 1→n Schedule với `ExamSchedules.ExamId` là FK đích. API ghi lịch/gán lớp và duyệt membership nay lấy SQL Server transaction application lock, kiểm phòng/học viên theo `[start,end)`, từ chối đổi lịch/gán lớp sau DoingExam/Submission; chỉ chấp nhận UTC `Z` cho giờ ghi mới. FE đọc offset theo Asia/Ho_Chi_Minh và giữ nguyên chuỗi cũ chưa rõ zone. Preflight trên `ProjectDACN` cho thấy Exam/Schedule/attempt/submission rỗng và chỉ migration đầu đã apply. Đã sao lưu gốc và restore `ProjectDACN_Task04Task09_Test`; trên bản sao đã áp Task04 rồi Task09. SQL Server E2E trả 201/409 cho hai request cùng phòng và hai request gán lớp làm học viên trùng giờ; khoảng chạm biên trả 201. DB gốc chưa áp migration. F16/F17 vẫn IN_PROGRESS đến khi kiểm đủ các nhánh nghiệp vụ, đặc biệt lịch có lượt thi/submission.
