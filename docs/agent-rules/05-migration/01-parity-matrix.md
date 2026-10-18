@@ -1,5 +1,13 @@
 # Ma trận chức năng Testify → DACN
 
+## Task11/Task13 — kết quả và báo cáo lượt DACN mới, 2026-10-18
+
+| Feature | Trạng thái | Bằng chứng và giới hạn |
+|---|---|---|
+| F20 Kết quả/lịch sử | IN_PROGRESS | API `GET /web/attempts/mine` và FE lịch sử riêng đã thêm. SQL copy fixture 2 học viên/5 lượt: list chỉ 4 lượt của chính học viên, phân trang 2, detail người khác 404, kết quả ẩn null cả list/detail. Dữ liệu Testify cũ chưa đối soát; chưa có review đáp án hoặc chính sách release chi tiết. Kiểm Chrome bổ sung ghi ở báo cáo nghiệm thu. |
+| F22 Thống kê/phổ điểm | IN_PROGRESS | API admin chỉ lấy `ExamAttempts` mới; SQL copy fixture 5 lượt, 4 đã chốt, 1 đang làm, 1 timeout, 1 ẩn, 2 đạt; điểm 2/4/6/8 cho trung bình 5 và tỷ lệ đạt 50%. Filter exam/class/subject, phân trang, permission 403 và options đạt qua API. Chrome → Vite → API → SQL copy hiển thị đúng 5 lượt và chỉ số admin. Chưa có đối soát legacy hoặc hủy attempt. |
+
+
 ## Task10 nghiệm thu bản sao — 2026-10-18
 
 | Feature | Trạng thái | Bằng chứng mới / còn thiếu |

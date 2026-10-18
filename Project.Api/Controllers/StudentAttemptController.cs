@@ -61,6 +61,47 @@ public class StudentAttemptController : ControllerBase
             await _finalizer.FinalizeAsync(row, now, true);
     }
 
+    // New DACN attempts only. Legacy DoingExam/Submission have no trustworthy snapshot
+    // linkage and are deliberately excluded until Task12 reconciliation.
+    [HttpGet("mine")]
+    public async Task<IActionResult> Mine([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+    {
+        var userId = Actor(); if (userId == null) return Unauthorized();
+        if (page < 1 || page > 100000 || pageSize is < 1 or > 100)
+            return BadRequest(ApiResponse<string>.Fail("INVALID_PAGING"));
+        var query = _db.ExamAttempts.AsNoTracking().Where(x => x.UserId == userId.Value);
+        var totalCount = await query.CountAsync();
+        var rows = await (from attempt in query
+            join schedule in _db.ExamSchedules.AsNoTracking() on attempt.ExamScheduleId equals schedule.Id
+            join exam in _db.Exams.AsNoTracking() on attempt.ExamId equals exam.Id
+            orderby attempt.StartedAtUtc descending, attempt.Id descending
+            select new {
+                attempt.Id, attempt.ExamScheduleId, attempt.ExamId,
+                ExamName = exam.Name, ScheduleTitle = schedule.Title,
+                attempt.StartedAtUtc, attempt.DeadlineUtc, attempt.FinishedAtUtc,
+                attempt.State, attempt.AllowViewResult,
+                SubmittedAtUtc = attempt.Submission == null ? (DateTime?)null : attempt.Submission.SubmittedAtUtc,
+                TotalMark = attempt.Submission == null ? (decimal?)null : attempt.Submission.TotalMark,
+                IsPassed = attempt.Submission == null ? (bool?)null : attempt.Submission.IsPassed,
+                TimeTakenSeconds = attempt.Submission == null ? (long?)null : attempt.Submission.TimeTakenSeconds
+            }).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+        var now = DateTime.UtcNow;
+        var items = rows.Select(x => new {
+            attemptId = x.Id, scheduleId = x.ExamScheduleId, examId = x.ExamId,
+            examName = x.ExamName, scheduleTitle = x.ScheduleTitle,
+            state = x.State,
+            pendingFinalization = x.State == "inProgress" && AttemptTiming.IsExpired(now, x.DeadlineUtc),
+            startedAt = Utc(x.StartedAtUtc), deadline = Utc(x.DeadlineUtc),
+            finishedAt = x.FinishedAtUtc.HasValue ? Utc(x.FinishedAtUtc.Value) : (DateTime?)null,
+            submittedAt = x.SubmittedAtUtc.HasValue ? Utc(x.SubmittedAtUtc.Value) : (DateTime?)null,
+            result = x.AllowViewResult && x.TotalMark.HasValue && x.IsPassed.HasValue
+                ? new { totalMark = x.TotalMark.Value, isPassed = x.IsPassed.Value,
+                    timeTakenSeconds = x.TimeTakenSeconds }
+                : null
+        }).ToList();
+        return Ok(ApiResponse<object>.Ok(new { scope = "dacnAttemptsOnly", page, pageSize, totalCount, items }));
+    }
+
     [HttpPost("/web/exam-schedules/{scheduleId:int}/attempts")]
     public async Task<IActionResult> Start(int scheduleId)
     {

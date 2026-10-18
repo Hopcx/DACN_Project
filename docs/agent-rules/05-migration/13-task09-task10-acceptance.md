@@ -96,3 +96,54 @@ Chưa có bằng chứng API/SQL cho start/resume/save/submit/grading, vượt s
 Thêm `Project.Domain/ValueObjects/AttemptSnapshot.cs`, DTO học viên trong `Project.Application/DTOs/AttemptDTO` và `AttemptSnapshotFactory`. Factory kiểm mã đề công khai và câu/đáp án hợp lệ theo loại 1–3 hiện có, sao chép nội dung/cờ đúng/điểm nguồn, tạo Guid riêng cho câu/options. DTO allowlist loại bỏ cờ đúng, ID nguồn và điểm. ValidateDraft kiểm quyền sở hữu lựa chọn trong snapshot, không cho trùng câu/đáp án hoặc nhiều lựa chọn cho loại 1/2; danh sách rỗng xóa toàn bộ lựa chọn, câu bỏ qua thành chưa trả lời. Điểm vẫn là double nguồn, chưa áp thuật toán chấm hay rounding.
 
 Lệnh đã đạt: `dotnet run --project tests/DependencyInjectionSmoke -- --attempt-snapshot`. Kiểm snapshot độc lập với thay đổi entity nguồn, JSON round-trip, allowlist chính xác DTO học viên, draft tách khỏi list client, câu bỏ qua/rỗng, nhiều lựa chọn, và các payload sai. Đây là **test cô lập**, không SQL/API; factory chưa nối vào controller/persistence. Không thêm package, schema hoặc migration. Không đưa baseline deadline/tính lượt vào code khi chưa có lựa chọn của người dùng.
+
+## Task11/Task13 — lịch sử học viên và báo cáo DACN mới, 2026-10-18
+
+Phần Task10 đã được tách và commit trên `dev/Hop`: BE `d37f4311e0e3f26369f45349177d343dbe75dff5`, FE `56adc93b03d914a030105e97b4eb5bdc8ab2d6d3`. Các thay đổi có sẵn ngoài Task10 (`.gitmodules`, `AuthController.cs`, tài liệu DOCX, `impeccable`, bản export `Gittodoc_testify.txt`) vẫn giữ nguyên; chưa push trong lượt này. Sau commit mới phát triển Task11/Task13, hiện là thay đổi chưa commit riêng.
+
+Danh sách file chính xác của commit Task10 BE (`git show --name-only d37f431`):
+
+```text
+Project.Api/Controllers/ExamScheduleController.cs
+Project.Api/Controllers/StudentAttemptController.cs
+Project.Api/Controllers/StudentScheduleController.cs
+Project.Api/Program.cs
+Project.Api/Services/AttemptFinalizer.cs
+Project.Api/Services/ExpiredAttemptFinalizerService.cs
+Project.Application/Services/AttemptScoring.cs
+Project.Application/Services/AttemptTiming.cs
+Project.Domain/Entities/ExamAttempt.cs
+Project.Infrastructure/Migrations/20261018053153_Task10ExamAttempts.Designer.cs
+Project.Infrastructure/Migrations/20261018053153_Task10ExamAttempts.cs
+Project.Infrastructure/Migrations/20261018063239_Task10TimeoutAndDuration.Designer.cs
+Project.Infrastructure/Migrations/20261018063239_Task10TimeoutAndDuration.cs
+Project.Infrastructure/Migrations/ProjectDACNDbContextModelSnapshot.cs
+Project.Infrastructure/Persistence/Configurations/ExamAttemptConfiguration.cs
+Project.Infrastructure/Persistence/ProjectDACNDbContext.cs
+Project.Infrastructure/Persistence/ScheduleWriteGuard.cs
+docs/agent-rules/00-overview/04-decisions.md
+docs/agent-rules/01-backend/04-exam-engine.md
+docs/agent-rules/04-contracts/01-http.md
+docs/agent-rules/04-contracts/02-exam-api.md
+docs/agent-rules/05-migration/01-parity-matrix.md
+docs/agent-rules/05-migration/12-data-readiness.md
+docs/agent-rules/05-migration/13-task09-task10-acceptance.md
+tests/DependencyInjectionSmoke/AttemptScoringSmoke.cs
+tests/DependencyInjectionSmoke/AttemptSnapshotSmoke.cs
+tests/DependencyInjectionSmoke/Program.cs
+tests/Task10AttemptSqlSmoke.ps1
+tests/Task10DeadlineRaceSqlSmoke.ps1
+tests/Task10TimeoutScoringSqlSmoke.ps1
+tests/WorkerSweepSmoke/Program.cs
+tests/WorkerSweepSmoke/WorkerSweepSmoke.csproj
+```
+
+Commit Task10 FE (`git show --name-only 56adc93`): `docs/agent-rules/00-overview/04-decisions.md`, `docs/agent-rules/04-contracts/01-http.md`, `docs/agent-rules/04-contracts/02-exam-api.md`, `docs/agent-rules/05-migration/01-parity-matrix.md`, `src/App.jsx`, `src/pages/attempts/StudentAttemptPage.jsx`, `src/pages/schedules/StudentSchedulesPage.jsx`, `src/services/attemptService.js`, `src/services/authService.js`, `tests/attemptBrowserSmoke.mjs`. File có thêm thay đổi Task11/13 sau commit được giữ ở working tree và không đưa vào commit Task10.
+
+Preflight chỉ đọc trên SQL Server: `DB_NAME()=ProjectDACN_Task04Task09_Test`, `__EFMigrationsHistory` đủ 6 migration đến `20261018063239_Task10TimeoutAndDuration`, trước fixture `ExamAttempts=0`, `ExamAttemptSubmissions=0`. **Không tạo hoặc áp migration**, không ghi `ProjectDACN` gốc, không đụng dữ liệu Testify.
+
+`tests/Task11Task13SqlSmoke.ps1` tạo ba user QA, một exam, một mã đề, hai lớp, bốn lịch và 5 lượt trên bản sao; hai lớp cùng gán vào lịch để kiểm không đếm đôi. Lượt gồm học viên A: 1 submitted/8 điểm/đạt, 1 submitted/6 điểm/đạt nhưng `AllowViewResult=false`, 1 timedOut/2 điểm/trượt, 1 inProgress; học viên B: 1 submitted/4 điểm/trượt. Qua API thật: học viên A list được đúng 4 lượt, trang 2 dòng, không thấy lượt B; kết quả ẩn là `result=null` ở list và detail; truy cập detail của B trả 404; Student gọi report trả 403. Admin report lọc exam/lớp/môn trả `total=5`, `finalized=4`, `inProgress=1`, `timeout=1`, `hidden=1`, `passed=2`, `averageScore=5`, `passPercent=50`, phổ điểm 2/4/6/8 mỗi mức một lượt. Trang 1 và 2 mỗi trang 2 dòng; lọc lớp thứ hai vẫn đếm 5 thay vì nhân đôi. SQL độc lập xác nhận 5 attempt, 1 inProgress và 4 submission. Chạy test trả PASS, finally dọn fixture; postflight `ExamAttempts=0`, `ExamAttemptSubmissions=0`.
+
+Chrome headless → Vite HTTPS → API → SQL bản sao: `attemptBrowserSmoke.mjs --hidden-result` PASS sau khi mở trang lịch sử mới, row và response list không có điểm/đạt/đáp án; mở lại chi tiết từ row vẫn ẩn. Bản chạy kết quả được phép xem cũng PASS: lịch → start → save → reload → submit → lịch sử → chi tiết, API và SQL có đúng một submission. `Task11Task13SqlSmoke.ps1 -Browser` PASS: màn admin hiển thị đúng 5 lượt cùng 8 chỉ số từ API, dù auth rate limit buộc smoke chờ retry. FE `npm run lint` PASS, `npm run build` PASS khi Vite được phép nạp native binding; BE `dotnet build Project.Api/Project.Api.csproj --no-restore` PASS (2 warning tồn tại từ package và UserController). Postflight cuối: DB copy có 0 attempt, 0 submission, 0 user `reportqa` của fixture báo cáo còn lại. Script browser Task10 giữ các user QA đã đăng ký như thiết kế cũ.
+
+F20/F22 giữ `IN_PROGRESS`: chưa đối soát/hiển thị `DoingExam`/`Submission` Testify cũ, chưa có review đáp án theo chính sách riêng hoặc void/audit lượt mới. Báo cáo chỉ có phạm vi DACN mới, không union dữ liệu legacy. Công thức gồm timeout và kết quả ẩn theo quyết định nghiệp vụ; lượt đang làm không nằm trong mẫu số. Báo cáo không chấm lại điểm lịch sử.
