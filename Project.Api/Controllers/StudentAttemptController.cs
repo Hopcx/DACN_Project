@@ -37,12 +37,13 @@ public class StudentAttemptController : ControllerBase
     {
         var finished = row.State != "inProgress";
         var result = row.Submission;
+        var voided = result?.VoidedAtUtc != null;
         return new {
-            attemptId = row.Id, scheduleId = row.ExamScheduleId, state = row.State,
+            attemptId = row.Id, scheduleId = row.ExamScheduleId, state = voided ? "voided" : row.State,
             serverNow = now, deadline = Utc(row.DeadlineUtc), revision = row.Revision,
             questions = finished ? Array.Empty<AttemptQuestionDto>() : AttemptSnapshotFactory.ForStudent(Snapshot(row)),
             savedAnswers = finished ? Array.Empty<AttemptAnswerDto>() : Draft(row),
-            result = finished && row.AllowViewResult && result != null
+            result = finished && !voided && row.AllowViewResult && result != null
                 ? new { totalMark = result.TotalMark, isPassed = result.IsPassed,
                     submittedAt = Utc(result.SubmittedAtUtc), timeTakenSeconds = result.TimeTakenSeconds }
                 : null
@@ -64,12 +65,17 @@ public class StudentAttemptController : ControllerBase
     // New DACN attempts only. Legacy DoingExam/Submission have no trustworthy snapshot
     // linkage and are deliberately excluded until Task12 reconciliation.
     [HttpGet("mine")]
-    public async Task<IActionResult> Mine([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+    public async Task<IActionResult> Mine([FromQuery] int page = 1, [FromQuery] int pageSize = 10,
+        [FromQuery] string? state = null)
     {
         var userId = Actor(); if (userId == null) return Unauthorized();
-        if (page < 1 || page > 100000 || pageSize is < 1 or > 100)
+        if (page < 1 || page > 100000 || pageSize is < 1 or > 100 ||
+            (state != null && state is not ("inProgress" or "submitted" or "timedOut" or "voided")))
             return BadRequest(ApiResponse<string>.Fail("INVALID_PAGING"));
         var query = _db.ExamAttempts.AsNoTracking().Where(x => x.UserId == userId.Value);
+        if (state == "voided") query = query.Where(x => x.Submission != null && x.Submission.VoidedAtUtc != null);
+        else if (state != null) query = query.Where(x => x.State == state &&
+            (x.Submission == null || x.Submission.VoidedAtUtc == null));
         var totalCount = await query.CountAsync();
         var rows = await (from attempt in query
             join schedule in _db.ExamSchedules.AsNoTracking() on attempt.ExamScheduleId equals schedule.Id
@@ -83,23 +89,54 @@ public class StudentAttemptController : ControllerBase
                 SubmittedAtUtc = attempt.Submission == null ? (DateTime?)null : attempt.Submission.SubmittedAtUtc,
                 TotalMark = attempt.Submission == null ? (decimal?)null : attempt.Submission.TotalMark,
                 IsPassed = attempt.Submission == null ? (bool?)null : attempt.Submission.IsPassed,
-                TimeTakenSeconds = attempt.Submission == null ? (long?)null : attempt.Submission.TimeTakenSeconds
+                TimeTakenSeconds = attempt.Submission == null ? (long?)null : attempt.Submission.TimeTakenSeconds,
+                VoidedAtUtc = attempt.Submission == null ? (DateTime?)null : attempt.Submission.VoidedAtUtc
             }).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
         var now = DateTime.UtcNow;
         var items = rows.Select(x => new {
             attemptId = x.Id, scheduleId = x.ExamScheduleId, examId = x.ExamId,
             examName = x.ExamName, scheduleTitle = x.ScheduleTitle,
-            state = x.State,
+            state = x.VoidedAtUtc.HasValue ? "voided" : x.State,
             pendingFinalization = x.State == "inProgress" && AttemptTiming.IsExpired(now, x.DeadlineUtc),
             startedAt = Utc(x.StartedAtUtc), deadline = Utc(x.DeadlineUtc),
             finishedAt = x.FinishedAtUtc.HasValue ? Utc(x.FinishedAtUtc.Value) : (DateTime?)null,
             submittedAt = x.SubmittedAtUtc.HasValue ? Utc(x.SubmittedAtUtc.Value) : (DateTime?)null,
-            result = x.AllowViewResult && x.TotalMark.HasValue && x.IsPassed.HasValue
+            result = !x.VoidedAtUtc.HasValue && x.AllowViewResult && x.TotalMark.HasValue && x.IsPassed.HasValue
                 ? new { totalMark = x.TotalMark.Value, isPassed = x.IsPassed.Value,
                     timeTakenSeconds = x.TimeTakenSeconds }
                 : null
         }).ToList();
-        return Ok(ApiResponse<object>.Ok(new { scope = "dacnAttemptsOnly", page, pageSize, totalCount, items }));
+        return Ok(ApiResponse<object>.Ok(new { scope = "dacnAttemptsOnly", page, pageSize, totalCount, state, items }));
+    }
+
+    [HttpGet("{id:guid}/review")]
+    public async Task<IActionResult> Review(Guid id)
+    {
+        var userId = Actor(); if (userId == null) return Unauthorized();
+        var row = await Owned(id, userId.Value);
+        if (row == null) return NotFound(ApiResponse<string>.Fail("ATTEMPT_NOT_FOUND"));
+        if (row.Submission?.VoidedAtUtc != null) return StatusCode(403, ApiResponse<string>.Fail("ATTEMPT_VOIDED"));
+        if (row.State == "inProgress" || row.Submission == null)
+            return Conflict(ApiResponse<string>.Fail("ATTEMPT_NOT_FINALIZED"));
+        if (!row.AllowViewResult) return StatusCode(403, ApiResponse<string>.Fail("RESULT_NOT_RELEASED"));
+        var schedule = await _db.ExamSchedules.AsNoTracking().FirstAsync(x => x.Id == row.ExamScheduleId);
+        if (!schedule.IsTimeUtc || DateTime.UtcNow < Utc(schedule.EndTime))
+            return StatusCode(403, ApiResponse<string>.Fail("REVIEW_NOT_RELEASED"));
+        var snapshot = Snapshot(row);
+        var answers = JsonSerializer.Deserialize<List<AttemptAnswerDto>>(row.Submission.AnswersJson, Json)
+            ?? new List<AttemptAnswerDto>();
+        var selected = answers.ToDictionary(x => x.QuestionId, x => x.SelectedAnswerIds);
+        var questions = snapshot.Questions.Select(question => new {
+            id = question.Id, questionTypeId = question.QuestionTypeId, content = question.Content,
+            selectedAnswerIds = selected.TryGetValue(question.Id, out var ids) ? ids : Array.Empty<Guid>(),
+            options = question.Options.Select(option => new {
+                id = option.Id, content = option.Content, isCorrect = option.IsCorrect
+            }).ToList()
+        }).ToList();
+        return Ok(ApiResponse<object>.Ok(new {
+            attemptId = row.Id, state = row.State, reviewedFrom = "attemptSnapshot",
+            questions
+        }));
     }
 
     [HttpPost("/web/exam-schedules/{scheduleId:int}/attempts")]

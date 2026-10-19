@@ -32,6 +32,9 @@ public class ExamAttemptSubmissionConfiguration : IEntityTypeConfiguration<ExamA
         entity.HasKey(x => x.ExamAttemptId);
         entity.Property(x => x.TotalMark).HasPrecision(18, 2);
         entity.Property(x => x.AnswersJson).HasColumnType("nvarchar(max)").IsRequired();
+        entity.Property(x => x.VoidReason).HasMaxLength(1000);
+        entity.HasOne<User>().WithMany().HasForeignKey(x => x.VoidedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
         entity.HasOne(x => x.Attempt).WithOne(x => x.Submission).HasForeignKey<ExamAttemptSubmission>(x => x.ExamAttemptId)
             .OnDelete(DeleteBehavior.Restrict);
     }

@@ -464,7 +464,19 @@ namespace Project.Infrastructure.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<DateTime?>("VoidedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("VoidedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("VoidReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.HasKey("ExamAttemptId");
+
+                    b.HasIndex("VoidedByUserId");
 
                     b.ToTable("ExamAttemptSubmissions", (string)null);
                 });
@@ -1328,6 +1340,11 @@ namespace Project.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Project.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("VoidedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Attempt");
                 });
 
@@ -1578,6 +1595,89 @@ namespace Project.Infrastructure.Migrations
                     b.Navigation("Submissions");
 
                     b.Navigation("UserPermissions");
+                });
+            // Task12 isolated historical projection. Keep the snapshot in sync with the
+            // hand-authored guarded migration; future scaffolding must retain these tables.
+            modelBuilder.Entity("Project.Domain.Entities.LegacyImportBatch", b =>
+                {
+                    b.Property<Guid>("Id").HasColumnType("uniqueidentifier");
+                    b.Property<DateTime>("ImportedAtUtc").HasColumnType("datetime2");
+                    b.Property<string>("Marker").IsRequired().HasMaxLength(100).HasColumnType("nvarchar(100)");
+                    b.Property<string>("SourceDatabase").IsRequired().HasMaxLength(128).HasColumnType("nvarchar(128)");
+                    b.Property<string>("SourceMigration").IsRequired().HasMaxLength(150).HasColumnType("nvarchar(150)");
+                    b.Property<string>("SourceSystem").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+                    b.HasKey("Id");
+                    b.HasIndex("SourceSystem", "SourceDatabase", "Marker").IsUnique();
+                    b.ToTable("LegacyImportBatches");
+                });
+            modelBuilder.Entity("Project.Domain.Entities.LegacyUserMap", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<Guid>("BatchId").HasColumnType("uniqueidentifier");
+                    b.Property<Guid>("SourceUserId").HasColumnType("uniqueidentifier");
+                    b.Property<Guid>("TargetUserId").HasColumnType("uniqueidentifier");
+                    b.HasKey("Id");
+                    b.HasIndex("BatchId", "SourceUserId").IsUnique();
+                    b.HasIndex("TargetUserId");
+                    b.ToTable("LegacyUserMaps");
+                });
+            modelBuilder.Entity("Project.Domain.Entities.LegacySubmissionRecord", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<Guid>("BatchId").HasColumnType("uniqueidentifier");
+                    b.Property<string>("SourceTable").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+                    b.Property<int>("SourceId").HasColumnType("int");
+                    b.Property<Guid>("SourceUserId").HasColumnType("uniqueidentifier");
+                    b.Property<Guid>("TargetUserId").HasColumnType("uniqueidentifier");
+                    b.Property<int>("SourceExamId").HasColumnType("int");
+                    b.Property<int>("SourceExamDetailId").HasColumnType("int");
+                    b.Property<int>("SourceScheduleId").HasColumnType("int");
+                    b.Property<string>("ExamName").IsRequired().HasMaxLength(500).HasColumnType("nvarchar(500)");
+                    b.Property<string>("ScheduleTitle").HasMaxLength(500).HasColumnType("nvarchar(500)");
+                    b.Property<DateTime>("SubmitTimeUnknown").HasColumnType("datetime2");
+                    b.Property<TimeOnly>("TimeTaken").HasColumnType("time");
+                    b.Property<double>("TotalMark").HasColumnType("float");
+                    b.Property<bool>("IsPassed").HasColumnType("bit");
+                    b.Property<bool?>("LegacyStatus").HasColumnType("bit");
+                    b.Property<bool>("AllowViewResult").HasColumnType("bit");
+                    b.Property<int>("Answered").HasColumnType("int");
+                    b.Property<int>("UnAnswered").HasColumnType("int");
+                    b.Property<byte[]>("SourceChecksum").IsRequired().HasColumnType("binary(32)");
+                    b.HasKey("Id");
+                    b.HasIndex("BatchId", "SourceTable", "SourceId").IsUnique();
+                    b.HasIndex("TargetUserId");
+                    b.ToTable("LegacySubmissionRecords");
+                });
+            modelBuilder.Entity("Project.Domain.Entities.LegacyAnswerSelection", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("LegacySubmissionRecordId").HasColumnType("bigint");
+                    b.Property<string>("SourceTable").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+                    b.Property<int>("SourceId").HasColumnType("int");
+                    b.Property<int>("SourceQuestionId").HasColumnType("int");
+                    b.Property<int>("SourceAnswerId").HasColumnType("int");
+                    b.Property<byte[]>("SourceChecksum").IsRequired().HasColumnType("binary(32)");
+                    b.HasKey("Id");
+                    b.HasIndex("LegacySubmissionRecordId", "SourceTable", "SourceId").IsUnique();
+                    b.ToTable("LegacyAnswerSelections");
+                });
+            modelBuilder.Entity("Project.Domain.Entities.LegacyUserMap", b =>
+                {
+                    b.HasOne("Project.Domain.Entities.LegacyImportBatch", null).WithMany().HasForeignKey("BatchId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("Project.Domain.Entities.User", null).WithMany().HasForeignKey("TargetUserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
+            modelBuilder.Entity("Project.Domain.Entities.LegacySubmissionRecord", b =>
+                {
+                    b.HasOne("Project.Domain.Entities.LegacyImportBatch", "Batch").WithMany().HasForeignKey("BatchId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("Project.Domain.Entities.User", null).WithMany().HasForeignKey("TargetUserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.Navigation("Batch");
+                });
+            modelBuilder.Entity("Project.Domain.Entities.LegacyAnswerSelection", b =>
+                {
+                    b.HasOne("Project.Domain.Entities.LegacySubmissionRecord", null).WithMany().HasForeignKey("LegacySubmissionRecordId").OnDelete(DeleteBehavior.Restrict).IsRequired();
                 });
 #pragma warning restore 612, 618
         }
