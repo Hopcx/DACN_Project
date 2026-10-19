@@ -37,10 +37,12 @@ public sealed class AdminAttemptReportController : ControllerBase
 
     [HttpGet]
     public async Task<IActionResult> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 10,
-        [FromQuery] int? examId = null, [FromQuery] int? classId = null, [FromQuery] int? subjectId = null)
+        [FromQuery] int? examId = null, [FromQuery] int? classId = null, [FromQuery] int? subjectId = null,
+        [FromQuery] string? state = null)
     {
         if (page < 1 || page > 100000 || pageSize is < 1 or > 100 ||
-            examId is <= 0 || classId is <= 0 || subjectId is <= 0)
+            examId is <= 0 || classId is <= 0 || subjectId is <= 0 ||
+            (state != null && state is not ("inProgress" or "submitted" or "timedOut" or "voided")))
             return BadRequest(ApiResponse<string>.Fail("INVALID_FILTER"));
 
         IQueryable<ExamAttempt> attempts = _db.ExamAttempts.AsNoTracking();
@@ -50,12 +52,17 @@ public sealed class AdminAttemptReportController : ControllerBase
         if (classId.HasValue)
             attempts = attempts.Where(x => _db.ClassExamSchedules.Any(link =>
                 link.ExamScheduleId == x.ExamScheduleId && link.ClassId == classId.Value));
+        if (state == "voided") attempts = attempts.Where(x => x.Submission != null && x.Submission.VoidedAtUtc != null);
+        else if (state != null) attempts = attempts.Where(x => x.State == state &&
+            (x.Submission == null || x.Submission.VoidedAtUtc == null));
 
         // A finalized attempt is one new attempt row in either terminal score state
         // with its unique submission. Hidden results and timeouts are included.
-        var finalized = attempts.Where(x => (x.State == "submitted" || x.State == "timedOut") && x.Submission != null);
+        var finalized = attempts.Where(x => (x.State == "submitted" || x.State == "timedOut") &&
+            x.Submission != null && x.Submission.VoidedAtUtc == null);
         var totalAttempts = await attempts.CountAsync();
         var inProgressCount = await attempts.CountAsync(x => x.State == "inProgress");
+        var voidedCount = await attempts.CountAsync(x => x.Submission != null && x.Submission.VoidedAtUtc != null);
         var finalizedCount = await finalized.CountAsync();
         var passedCount = await finalized.CountAsync(x => x.Submission!.IsPassed);
         var timeoutCount = await finalized.CountAsync(x => x.State == "timedOut");
@@ -78,24 +85,30 @@ public sealed class AdminAttemptReportController : ControllerBase
                 attempt.State, attempt.AllowViewResult,
                 SubmittedAtUtc = attempt.Submission == null ? (DateTime?)null : attempt.Submission.SubmittedAtUtc,
                 TotalMark = attempt.Submission == null ? (decimal?)null : attempt.Submission.TotalMark,
-                IsPassed = attempt.Submission == null ? (bool?)null : attempt.Submission.IsPassed
+                IsPassed = attempt.Submission == null ? (bool?)null : attempt.Submission.IsPassed,
+                VoidedAtUtc = attempt.Submission == null ? (DateTime?)null : attempt.Submission.VoidedAtUtc,
+                VoidedByUserId = attempt.Submission == null ? (Guid?)null : attempt.Submission.VoidedByUserId,
+                VoidReason = attempt.Submission == null ? null : attempt.Submission.VoidReason
             }).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
         var items = rows.Select(x => new {
             source = "dacnAttempt", attemptId = x.Id, userId = x.UserId, userName = x.UserName,
             examId = x.ExamId, examName = x.ExamName, subjectId = x.SubjectId,
             scheduleId = x.ExamScheduleId, scheduleTitle = x.ScheduleTitle,
-            state = x.State, allowViewResult = x.AllowViewResult,
+            state = x.VoidedAtUtc.HasValue ? "voided" : x.State, originalState = x.State,
+            allowViewResult = x.AllowViewResult,
             startedAt = Utc(x.StartedAtUtc), deadline = Utc(x.DeadlineUtc),
             finishedAt = x.FinishedAtUtc.HasValue ? Utc(x.FinishedAtUtc.Value) : (DateTime?)null,
             submittedAt = x.SubmittedAtUtc.HasValue ? Utc(x.SubmittedAtUtc.Value) : (DateTime?)null,
-            totalMark = x.TotalMark, isPassed = x.IsPassed
+            totalMark = x.TotalMark, isPassed = x.IsPassed,
+            voidedAt = x.VoidedAtUtc.HasValue ? Utc(x.VoidedAtUtc.Value) : (DateTime?)null,
+            voidedByUserId = x.VoidedByUserId, voidReason = x.VoidReason
         }).ToList();
         return Ok(ApiResponse<object>.Ok(new {
             scope = "dacnAttemptsOnly", classFilterMeaning = "scheduleAssignedToClass",
             page, pageSize, totalCount = totalAttempts,
-            filters = new { examId, classId, subjectId },
+            filters = new { examId, classId, subjectId, state },
             summary = new {
-                totalAttempts, inProgressCount,
+                totalAttempts, inProgressCount, voidedCount,
                 finalizedCount, submittedCount = finalizedCount - timeoutCount, timeoutCount,
                 hiddenResultCount, passedCount, failedCount = finalizedCount - passedCount,
                 averageScore = decimal.Round(averageScore, 2, MidpointRounding.ToEven),
