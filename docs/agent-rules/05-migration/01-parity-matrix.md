@@ -1,5 +1,25 @@
 # Ma trận chức năng Testify → DACN
 
+## F20–F22 fixture kỹ thuật — 2026-10-19
+
+| Feature | Trạng thái | Bằng chứng và giới hạn |
+|---|---|---|
+| F20 Kết quả/lịch sử | IN_PROGRESS | Projection riêng 4 `Submission` giả từ bản sao source 1 migration sang bản sao target 8 migration; API owner 2+2, phân trang, cross-owner 404, review legacy 409/404 vì không có snapshot, `AllowViewResult=false` ẩn score/pass ở list/detail. Dry-run rollback và apply/rerun/rollback đạt. FE đã nối lịch sử legacy riêng, lint/build đạt; chưa kiểm browser hoặc dữ liệu Testify thật. |
+| F21 Hủy kết quả | IN_PROGRESS | Fixture giữ `Status=true/false/null` = 2/1/1, không gọi `false` là void có audit; quy tắc hủy DACN mới không đổi. Chưa đối soát hủy lịch sử Testify thật. |
+| F22 Thống kê/phổ điểm | IN_PROGRESS | Admin API `legacySubmissionsOnly` tách khỏi `dacnAttemptsOnly`; API/SQL khớp 4 bài, tổng float ~10.02, Status 2/1/1, ba filter trả 2/1/1, phân trang 2; Student bị 403. FE đã nối report legacy riêng, lint/build đạt; chưa kiểm browser, dữ liệu Testify thật hoặc quyết định gộp chỉ số. |
+
+Chi tiết [mapping fixture](15-f20-f22-fixture-mapping.md), [Task12](14-task12-testify-reconciliation.md). Fixture đã CLEAN/rollback, source còn 1 migration/0 bài giả, target còn 8 migration/0 projection, `ProjectDACN` gốc còn 1 migration/0 Submission.
+
+## Task11 race / Task12 nguồn được xác nhận — 2026-10-19
+
+| Feature | Trạng thái | Bằng chứng và giới hạn hiện hành |
+|---|---|---|
+| F20 Kết quả/lịch sử | IN_PROGRESS | Browser/API/SQL bản sao đã kiểm owner, ẩn kết quả, review từ snapshot và trạng thái hủy. DB nguồn `ProjectDACN` do người dùng xác nhận có **0 Submission/DoingExam**, nên chưa có lượt Testify thật để đối soát/hiển thị. Bốn Submission ở bản sao không tồn tại trong nguồn này, không gắn nhãn Testify. |
+| F21 Hủy kết quả | IN_PROGRESS | Hai admin gửi đồng thời cùng lượt: cùng lý do 200/200, khác lý do 200/409; SQL giữ một actor/lý do/UTC và điểm gốc, Student list ẩn kết quả. Hủy vẫn tính `NumberOfRepeat`; việc hoàn lượt sau này là use case admin riêng có audit. Chưa đối soát trạng thái `Submission.Status` trên dữ liệu Testify thật (nguồn 0 hàng). |
+| F22 Thống kê/phổ điểm | IN_PROGRESS | Sau race fixture 7 lượt/6 submission/3 đã hủy: tổng 7, finalized 3, đạt 1, trung bình 4, tỷ lệ 33.33%, phổ điểm 3 mức; API và SQL khớp. Report chỉ gồm attempt DACN mới, không đếm đôi. DB nguồn 0 kết quả Testify, nên chưa nghiệm thu cách gộp/báo cáo lịch sử. |
+
+Chi tiết số hàng, mapping và rollback ở [Task12](14-task12-testify-reconciliation.md); các mục dưới là bằng chứng theo thời điểm trước.
+
 ## Task11 xem lại bài / hủy kết quả — nghiệm thu bản sao 2026-10-19
 
 | Feature | Trạng thái | Bằng chứng và giới hạn |

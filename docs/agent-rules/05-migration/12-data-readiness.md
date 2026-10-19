@@ -1,5 +1,9 @@
 # Task 12 — kiểm kê dữ liệu trước đổi schema (2026-10-07)
 
+## Nguồn Task12 được xác nhận — 2026-10-19
+
+Người dùng xác nhận DB `ProjectDACN` gốc là nguồn đối soát; chỉ chạy truy vấn đọc. DB này có 1 migration gốc, 1 User, 1 Subject, 0 Exam/Schedule/DoingExam/Submission/AnswerSubmission. Bản sao thử đã có 7 migration và dữ liệu QA riêng (sau dọn race: 76 Users, 14 Exams, 74 Schedules, 12 DoingExams, 4 Submissions, 0 ExamAttempts/ExamAttemptSubmissions). Không coi fixture bản sao là dữ liệu Testify. DB `Testify` cục bộ cũng có 0 Exam/DoingExam/Submission nhưng không phải nguồn được chọn. Mapping, phân loại, số hàng và dry-run/rollback ở [báo cáo Task12](14-task12-testify-reconciliation.md). **Không có ETL hoặc migration lên DB gốc.** Các số liệu cũ bên dưới là ảnh chụp ở thời điểm trước.
+
 ## Hậu kiểm Task10 timeout trên bản sao — 2026-10-18
 
 `ProjectDACN_Task04Task09_Test` đã áp thêm `20261018063239_Task10TimeoutAndDuration` sau `20261018053153_Task10ExamAttempts`. SQL hậu kiểm: history 6 migration, migration mới là hàng cuối; `ExamAttempts.PassMark float NOT NULL`, `ExamAttemptSubmissions.TimeTakenSeconds bigint NULL`; sau dọn fixture hai bảng đều 0 hàng. `ProjectDACN` gốc chỉ đọc: history 1, không có `dbo.ExamAttempts`. Chi tiết phép thử ở [báo cáo nghiệm thu](13-task09-task10-acceptance.md). Các số history 5 ở mục ngày trước bên dưới là ảnh chụp trước migration timeout, không phải trạng thái hiện tại.

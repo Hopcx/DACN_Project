@@ -1,5 +1,11 @@
 # Decision register v0.2
 
+## Quyết định hủy lượt và nguồn Task12 — 2026-10-19
+
+Lượt DACN đã hủy **vẫn tính vào tổng lượt tối đa `NumberOfRepeat`**. Hủy kết quả chỉ đổi quyền hiển thị và tập thống kê; không xóa attempt, không hoàn lượt và không thay điểm/đáp án audit. Code Testify `SubmissionReposiroty.CheckNumberOfSubmit` đếm mọi Submission theo user/lịch mà không lọc `Status`, phù hợp với quy tắc này. Nếu sau này cần hoàn lượt, phải có use case quản trị **riêng** với quyền, lý do, actor, giờ server và audit; không gắn ngầm vào thao tác hủy.
+
+Người dùng xác nhận dùng DB `ProjectDACN` làm nguồn Task12. Preflight chỉ đọc cho thấy DB này có 0 Exam/DoingExam/Submission; bản sao có dữ liệu QA phát sinh sau restore. Vì vậy chưa có lượt Testify thực tế để chuyển hoặc đối soát điểm. Không lấy DB `Testify` cục bộ hay fixture trong bản sao làm nguồn thay thế nếu chưa được chỉ định lại.
+
 ## Quyết định Task10 cho lượt DACN mới — 2026-10-18
 
 Giữ snapshot, deadline UTC cố định và số lượt tính khi transaction start thành công. Chấm điểm từ snapshot bằng `decimal`: mỗi câu chỉ được trọn điểm khi tập chọn bằng đúng tập đáp án đúng; bỏ trống, thiếu hoặc thừa được 0. Cộng điểm trước, so `PassMark` với **tổng chưa làm tròn**, rồi làm tròn tổng một lần đến hai chữ số bằng `MidpointRounding.ToEven` để lưu/hiển thị. Vì vậy có thể hiển thị 1.00 nhưng vẫn đạt ngưỡng 1.004, hoặc hiển thị 1.02 nhưng chưa đạt ngưỡng 1.016. Không đổi trạng thái đạt để khớp điểm hiển thị.
@@ -23,6 +29,7 @@ FACT phản ánh commit đã đọc. REQUIRED là quy tắc triển khai trên c
 | A11 | Attempt/snapshot/server grading — ĐÃ TRIỂN KHAI CHO LƯỢT MỚI | Attempt API dùng snapshot và finalizer riêng; Submission CRUD lịch sử không dùng để nộp bài mới. Xem contract thi và báo cáo Task10. |
 | A12 | Giữ contract auth body để tích hợp, rồi harden có kế hoạch — REQUIRED | Hiện trả accessToken/refreshToken JSON; HttpOnly cookie và token hash là đích chuyển đổi, chưa tồn tại |
 | A13 | `/web/*` và ApiResponse — FACT/REQUIRED | Không gọi `/api/v1` hay assume response ProblemDetails cho mọi lỗi |
+| A14 | Lịch sử không snapshot dùng projection riêng — quyết định kỹ thuật Task12 | Fixture giả trên bản sao khẳng định khả năng lưu provenance/score float/Status ba giá trị mà không tạo `ExamAttempts`; review đáp án đúng trả 409. Chưa suy ra trạng thái Testify thật hoặc nhập dữ liệu nguồn gốc. |
 
 ## OPEN và mục đã giải quyết
 

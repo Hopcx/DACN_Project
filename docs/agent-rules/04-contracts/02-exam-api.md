@@ -8,7 +8,9 @@
 
 `GET /web/attempts/mine` nhận thêm `state=inProgress|submitted|timedOut|voided`. `GET /web/admin/attempt-reports` nhận cùng bộ lọc state; row đã hủy có `state=voided`, `originalState`, `voidedAt`, `voidedByUserId`, `voidReason`. `totalAttempts` vẫn gồm lượt hủy; `voidedCount` đếm riêng. `finalizedCount`, `passedCount`, `failedCount`, `passPercent`, `averageScore`, `distribution`, `timeoutCount`, `hiddenResultCount` chỉ tính submission chưa hủy; inProgress không vào mẫu số. Timeout và AllowViewResult=false chưa hủy vẫn được tính. Báo cáo chỉ lấy lượt DACN mới, không gộp bảng lịch sử.
 
-Lượt đã hủy **vẫn tính** trong giới hạn `NumberOfRepeat` hiện hành (tổng lượt start thành công); chưa có quy tắc Testify đã xác minh để hoàn lượt. Việc đổi quota cần quyết định nghiệp vụ và đối soát riêng. Migration `20261019090000_Task11AttemptVoidAudit` thêm ba cột nullable cùng FK actor `Users`, giữ các hàng trước đó. Đã áp trên DB bản sao thử nghiệm; DB gốc chưa áp.
+**Quyết định nghiệp vụ:** lượt đã hủy **vẫn tính** trong giới hạn `NumberOfRepeat` (tổng lượt start thành công). Hủy không hoàn lượt; nếu sau này cần hoàn lượt, đó là use case quản trị riêng có quyền, lý do, actor, giờ server và audit. Code Testify `CheckNumberOfSubmit` cũng đếm mọi Submission, không lọc `Status`. Migration `20261019090000_Task11AttemptVoidAudit` thêm ba cột nullable cùng FK actor `Users`, giữ các hàng trước đó. Đã áp trên DB bản sao thử nghiệm; DB gốc chưa áp.
+
+**Task12:** DB nguồn được người dùng xác nhận là `ProjectDACN`, nhưng preflight chỉ đọc có 0 Exam/DoingExam/Submission; không có lượt Testify thực tế để ETL hoặc đối soát điểm. API attempt history/report vẫn chỉ gồm `source=dacnAttempt` mới; route projection legacy riêng ở dưới chỉ nhận hàng có provenance đã nhập và không union ngầm. Không dựng snapshot giả, không gắn UTC cho DateTime không offset, không tính lại `TotalMark`/`IsPassed` đã lưu. Xem [báo cáo Task12](../05-migration/14-task12-testify-reconciliation.md).
 
 ## Task11/Task13: lịch sử học viên và báo cáo lượt DACN mới — 2026-10-18
 
@@ -43,6 +45,19 @@ Các lỗi hiện có: 403 không có membership/quyền; 404 không tồn tại
 GET/save/submit còn kiểm membership đã duyệt hiện tại; thu hồi membership khiến các route attempt đó trả 404. Start từ exam có `ScoreMethodId` khác null bị chặn `EXAM_CONFIGURATION_INVALID` cho đến khi có thuật toán chấm tương ứng, tránh chấm ngầm bằng quy tắc mặc định.
 
 Nếu request start gặp lượt cũ đang mở nhưng đã qua deadline, server finalize timeout và trả chính lượt đó sau khi commit. Request start kế tiếp mới xét tạo lượt mới nếu lịch còn mở và còn quota.
+
+## Projection lịch sử tách biệt — fixture kỹ thuật Task12, 2026-10-19
+
+Migration `20261019090000_Task12LegacyProjection` tạo `LegacyImportBatches`, `LegacyUserMaps`, `LegacySubmissionRecords`, `LegacyAnswerSelections`. Khóa provenance gồm hệ thống nguồn, database nguồn, migration nguồn, marker/batch, bảng và legacy ID; cùng marker chỉ được nhập một batch, unique source ID trong batch. Import giữ `Submissions.TotalMark` kiểu SQL `float`, `IsPassed`, `Status bit?`, `SubmitTime datetime2` và `TimeTaken time` nguyên bản; `Status=false` không được diễn giải thành lượt hủy DACN mới. Timestamp không offset trả `submittedAtLocalUnknown` dạng chuỗi không có `Z` và `timeZoneStatus="unknown"`. Không chèn vào `ExamAttempts`, không tạo snapshot hoặc chấm lại. Hai user nguồn được map rõ sang hai user đích có quyền Student; hash/password nguồn không nhập.
+
+| Route hiện hành | Quyền và dữ liệu |
+|---|---|
+| `GET /web/legacy-submissions/mine?page=&pageSize=` | Student từ JWT; chỉ projection có `TargetUserId` khớp, phân trang. `scope=legacySubmissionsOnly`, `source=legacySubmission`, `legacyStatus` giữ true/false/null. `result` chỉ có điểm/đạt khi `AllowViewResult=true`. Không trả đáp án đúng. |
+| `GET /web/legacy-submissions/{id}` | Student chủ sở hữu; ID người khác 404. Cùng allowlist như list, `hasSnapshot=false`, `canReviewAnswers=false`. |
+| `GET /web/legacy-submissions/{id}/review` | Chủ sở hữu trả 409 `LEGACY_SNAPSHOT_UNAVAILABLE`; người khác 404. Không dựng lại đáp án từ câu hỏi hiện tại. |
+| `GET /web/admin/legacy-submission-reports?page=&pageSize=&status=` | `AdminManagement`; `scope=legacySubmissionsOnly`, summary tổng số, số `Status=true/false/null`, tổng `TotalMark` lưu gốc; items phân trang. `status=accepted/notRecognized/pending` lọc ba trạng thái riêng, giá trị khác trả 400 `INVALID_LEGACY_STATUS`. Không union với `/web/admin/attempt-reports` (`dacnAttemptsOnly`). |
+
+Các route trên hỗ trợ projection có provenance đã kiểm; fixture 4 bài nộp chỉ là dữ liệu giả, không chứng minh parity Testify. API cho lượt DACN mới và quota `NumberOfRepeat` không thay đổi. FE đã nối danh sách legacy riêng trong lịch sử học viên và báo cáo admin với lọc `Status`, nhưng chưa kiểm trên trình duyệt; đối soát nguồn Testify thật chưa nghiệm thu.
 
 ## Ghi chú trước triển khai (lịch sử, không phải contract hiện hành)
 

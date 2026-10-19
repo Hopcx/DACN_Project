@@ -32,7 +32,27 @@ function Post([string]$url,[string]$token,$body) {
     $response=Invoke-WebRequest "$BaseUrl$url" -Method Post -Headers @{Authorization="Bearer $token"} -SkipCertificateCheck -SkipHttpErrorCheck -ContentType 'application/json' -Body ($body | ConvertTo-Json -Compress)
     return @{status=[int]$response.StatusCode;body=($response.Content | ConvertFrom-Json)}
 }
-$student=[Guid]::Empty;$other=[Guid]::NewGuid();$admin=[Guid]::NewGuid();$exam=0;$class=0;$class2=0
+function RaceVoid([string]$attemptId,[string]$tokenA,[string]$reasonA,[string]$tokenB,[string]$reasonB) {
+    $gate=[System.Threading.ManualResetEventSlim]::new($false)
+    $jobs=@()
+    try {
+        foreach ($entry in @(@($tokenA,$reasonA),@($tokenB,$reasonB))) {
+            $jobs+=Start-ThreadJob -ScriptBlock {
+                param($barrier,$base,$id,$token,$reason)
+                $barrier.Wait()
+                $response=Invoke-WebRequest "$base/web/admin/attempts/$id/void" -Method Post -Headers @{Authorization="Bearer $token"} -SkipCertificateCheck -SkipHttpErrorCheck -ContentType 'application/json' -Body (@{reason=$reason} | ConvertTo-Json -Compress)
+                return @{status=[int]$response.StatusCode;body=($response.Content | ConvertFrom-Json);reason=$reason}
+            } -ArgumentList $gate,$BaseUrl,$attemptId,$entry[0],$entry[1]
+        }
+        $gate.Set()
+        $jobs | Wait-Job | Out-Null
+        return @($jobs | Receive-Job -ErrorAction Stop)
+    } finally {
+        $gate.Dispose()
+        $jobs | Remove-Job -Force -ErrorAction SilentlyContinue
+    }
+}
+$student=[Guid]::Empty;$other=[Guid]::NewGuid();$admin=[Guid]::NewGuid();$admin2=[Guid]::NewGuid();$exam=0;$class=0;$class2=0
 try {
     $register=Auth 'register' @{fullName='Report QA';userName="reportqa$tag";email=$email;password=$password;address='QA';dateOfBirth='2000-01-01T00:00:00Z';sex=$true}
     if ($register.status -ne 202) { throw "Register HTTP $($register.status)" }
@@ -47,10 +67,13 @@ try {
     Sql "INSERT dbo.Users(Id,FullName,UserName,Email,PasswordHash,LevelId,Status,EmailVerifiedAt,DateOfBirth,Address,Sex)
       SELECT '$other',N'Other report QA',N'other$tag',N'other$tag@example.invalid',PasswordHash,4,1,SYSUTCDATETIME(),'2000-01-01',N'QA',1 FROM dbo.Users WHERE Id='$student';
       INSERT dbo.Users(Id,FullName,UserName,Email,PasswordHash,LevelId,Status,EmailVerifiedAt,DateOfBirth,Address,Sex)
-      SELECT '$admin',N'Admin report QA',N'admin$tag',N'admin$tag@example.invalid',PasswordHash,1,1,SYSUTCDATETIME(),'2000-01-01',N'QA',1 FROM dbo.Users WHERE Id='$student';" | Out-Null
+      SELECT '$admin',N'Admin report QA',N'admin$tag',N'admin$tag@example.invalid',PasswordHash,1,1,SYSUTCDATETIME(),'2000-01-01',N'QA',1 FROM dbo.Users WHERE Id='$student';
+      INSERT dbo.Users(Id,FullName,UserName,Email,PasswordHash,LevelId,Status,EmailVerifiedAt,DateOfBirth,Address,Sex)
+      SELECT '$admin2',N'Admin two QA',N'admin2$tag',N'admin2$tag@example.invalid',PasswordHash,1,1,SYSUTCDATETIME(),'2000-01-01',N'QA',1 FROM dbo.Users WHERE Id='$student';" | Out-Null
     $otherToken=[string](Auth 'login' @{keyword="other$tag@example.invalid";password=$password}).body.data.accessToken
     $adminToken=[string](Auth 'login' @{keyword="admin$tag@example.invalid";password=$password}).body.data.accessToken
-    if (-not $otherToken -or -not $adminToken) { throw 'Fixture login failed.' }
+    $admin2Token=[string](Auth 'login' @{keyword="admin2$tag@example.invalid";password=$password}).body.data.accessToken
+    if (-not $otherToken -or -not $adminToken -or -not $admin2Token) { throw 'Fixture login failed.' }
     $ids=Sql @"
 DECLARE @subject int=(SELECT TOP 1 Id FROM dbo.Subjects ORDER BY Id);
 INSERT dbo.Exams(Name,SubjectId,NumberOfQuestions,NumberOfRepeat,Status,MaximmumMark,PassMark,Duration,AllowViewResult)
@@ -150,6 +173,44 @@ SELECT CONCAT(@exam,',',@class,',',@class2,',',@a1,',',@a2,',',@a5);
     $sum=$fullAfter.body.data.summary
     if ($sum.totalAttempts -ne 5 -or $sum.voidedCount -ne 1 -or $sum.finalizedCount -ne 3 -or $sum.passedCount -ne 1 -or $sum.averageScore -ne 4 -or $sum.passPercent -ne 33.33) { throw "Post-void report mismatch: $($sum | ConvertTo-Json -Compress)" }
     if ((Sql "SELECT CONCAT(COUNT(*),',',SUM(CASE WHEN VoidedAtUtc IS NOT NULL THEN 1 ELSE 0 END)) FROM dbo.ExamAttemptSubmissions WHERE ExamAttemptId IN (SELECT Id FROM dbo.ExamAttempts WHERE ExamId=$exam);") -ne '4,1') { throw 'SQL void count mismatch.' }
+    $sameId=[Guid]::NewGuid();$differentId=[Guid]::NewGuid();$raceStarted=[DateTime]::UtcNow
+    Sql "DECLARE @schedule int=(SELECT TOP 1 Id FROM dbo.ExamSchedules WHERE ExamId=$exam ORDER BY Id);
+      DECLARE @variant int=(SELECT TOP 1 Id FROM dbo.ExamDetails WHERE ExamId=$exam ORDER BY Id);
+      DECLARE @now datetime2=SYSUTCDATETIME();
+      INSERT dbo.ExamAttempts(Id,UserId,ExamScheduleId,ExamId,ExamDetailId,StartedAtUtc,DeadlineUtc,FinishedAtUtc,State,Revision,SnapshotJson,DraftJson,PassMark,AllowViewResult)
+      VALUES('$sameId','$student',@schedule,$exam,@variant,DATEADD(minute,-5,@now),DATEADD(hour,1,@now),@now,N'submitted',0,N'{}',N'[]',5,1),
+            ('$differentId','$student',@schedule,$exam,@variant,DATEADD(minute,-5,@now),DATEADD(hour,1,@now),@now,N'submitted',0,N'{}',N'[]',5,1);
+      INSERT dbo.ExamAttemptSubmissions(ExamAttemptId,SubmittedAtUtc,TimeTakenSeconds,TotalMark,IsPassed,AnswersJson)
+      VALUES('$sameId',@now,300,8,1,N'[]'),('$differentId',@now,300,8,1,N'[]');" | Out-Null
+    $same=@(RaceVoid "$sameId" $adminToken 'Race same reason' $admin2Token 'Race same reason')
+    if ($same.Count -ne 2 -or @($same | Where-Object status -EQ 200).Count -ne 2) { throw "Same-reason race failed: $($same | ConvertTo-Json -Compress -Depth 4)" }
+    if ($same[0].body.data.voidedAt -ne $same[1].body.data.voidedAt -or
+        $same[0].body.data.voidedByUserId -ne $same[1].body.data.voidedByUserId) { throw 'Same-reason race changed audit between responses.' }
+    $different=@(RaceVoid "$differentId" $adminToken 'Race reason A' $admin2Token 'Race reason B')
+    if ($different.Count -ne 2 -or @($different | Where-Object status -EQ 200).Count -ne 1 -or @($different | Where-Object status -EQ 409).Count -ne 1 -or
+        ($different | Where-Object status -EQ 409).body.message -ne 'ATTEMPT_ALREADY_VOIDED') { throw "Different-reason race failed: $($different | ConvertTo-Json -Compress -Depth 4)" }
+    foreach ($raceId in @($sameId,$differentId)) {
+        $row=Sql "SELECT CONCAT(CONVERT(varchar(33),VoidedAtUtc,126),'|',VoidedByUserId,'|',VoidReason,'|',TotalMark,'|',IsPassed) FROM dbo.ExamAttemptSubmissions WHERE ExamAttemptId='$raceId';"
+        $parts=$row.Split('|');$at=[DateTime]::Parse($parts[0]);$actor=[Guid]$parts[1]
+        if ($parts.Count -ne 5 -or $at -lt $raceStarted.AddSeconds(-2) -or $at -gt [DateTime]::UtcNow.AddSeconds(2) -or
+            $actor -notin @($admin,$admin2) -or $parts[3] -ne '8.00' -or $parts[4] -ne '1') { throw "Race audit invalid: $row" }
+        $winner=if ($raceId -eq $sameId) { $same | Where-Object { $_.body.data.voidedByUserId -eq $actor.ToString() } | Select-Object -First 1 }
+            else { $different | Where-Object status -EQ 200 | Select-Object -First 1 }
+        if (-not $winner -or $winner.body.data.reason -ne $parts[2] -or [Guid]$winner.body.data.voidedByUserId -ne $actor) { throw 'Winning response differs from SQL audit.' }
+    }
+    $raceMine=Get '/web/attempts/mine?state=voided&pageSize=10' $studentToken
+    if ($raceMine.body.data.totalCount -ne 3 -or @($raceMine.body.data.items | Where-Object { $null -ne $_.result }).Count -ne 0) { throw 'Student voided history after race failed.' }
+    $raceReport=Get "/web/admin/attempt-reports?examId=$exam" $adminToken
+    $raceSummary=$raceReport.body.data.summary
+    if ($raceSummary.totalAttempts -ne 7 -or $raceSummary.voidedCount -ne 3 -or $raceSummary.finalizedCount -ne 3 -or
+        $raceSummary.passedCount -ne 1 -or $raceSummary.averageScore -ne 4 -or $raceSummary.passPercent -ne 33.33 -or
+        @($raceReport.body.data.distribution).Count -ne 3) { throw "Report after race invalid: $($raceSummary | ConvertTo-Json -Compress)" }
+    if ((Sql "SELECT CONCAT(COUNT(*),',',SUM(CASE WHEN VoidedAtUtc IS NOT NULL THEN 1 ELSE 0 END)) FROM dbo.ExamAttemptSubmissions WHERE ExamAttemptId IN (SELECT Id FROM dbo.ExamAttempts WHERE ExamId=$exam);") -ne '6,3') { throw 'SQL race submission/void counts invalid.' }
+    Sql "UPDATE dbo.Exams SET NumberOfRepeat=1 WHERE Id=$exam;" | Out-Null
+    $quotaSchedule=[int](Sql "SELECT TOP 1 Id FROM dbo.ExamSchedules WHERE ExamId=$exam ORDER BY Id;")
+    $quota=Post "/web/exam-schedules/$quotaSchedule/attempts" $studentToken @{}
+    if ($quota.status -ne 409 -or $quota.body.message -ne 'ATTEMPT_LIMIT_REACHED') { throw "Voided attempts were refunded: $($quota | ConvertTo-Json -Compress -Depth 4)" }
+    Write-Output 'PASS concurrent void: same reason 200/200, different reason 200/409; one immutable audit per attempt, owner history/report consistent, voided attempts still exhaust quota.'
     Write-Output 'PASS Task11 review authorization, void audit/idempotence, hidden result, history and report after void.'
     Write-Output "PASS Task11/13 API-SQL: student 4/other 1, hidden list/detail, owner 404, student admin 403; report total=5 finalized=4 active=1 timeout=1 hidden=1 pass=2 avg=5 rate=50; distribution=4; class/exam/subject and paging."
 }
@@ -160,7 +221,7 @@ finally {
       DELETE dbo.ExamSchedules WHERE ExamId=$exam; DELETE dbo.ExamDetails WHERE ExamId=$exam;
       DELETE dbo.Exams WHERE Id=$exam; DELETE dbo.ClassUsers WHERE ClassId IN ($class,$class2);
       DELETE dbo.Classes WHERE Id IN ($class,$class2);" | Out-Null }
-    if ($student -ne [Guid]::Empty) { Sql "DELETE dbo.RefreshTokens WHERE UserId IN ('$student','$other','$admin');
-      DELETE dbo.Users WHERE Id IN ('$student','$other','$admin');" | Out-Null }
+    if ($student -ne [Guid]::Empty) { Sql "DELETE dbo.RefreshTokens WHERE UserId IN ('$student','$other','$admin','$admin2');
+      DELETE dbo.Users WHERE Id IN ('$student','$other','$admin','$admin2');" | Out-Null }
     if ($mail) { Remove-Item -LiteralPath $mail.FullName }
 }

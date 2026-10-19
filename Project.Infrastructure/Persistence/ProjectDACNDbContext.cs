@@ -32,6 +32,10 @@ namespace Project.Infrastructure.Persistence
         public virtual DbSet<DoingExam> DoingExams { get; set; }
         public DbSet<ExamAttempt> ExamAttempts { get; set; }
         public DbSet<ExamAttemptSubmission> ExamAttemptSubmissions { get; set; }
+        public DbSet<LegacyImportBatch> LegacyImportBatches { get; set; }
+        public DbSet<LegacyUserMap> LegacyUserMaps { get; set; }
+        public DbSet<LegacySubmissionRecord> LegacySubmissionRecords { get; set; }
+        public DbSet<LegacyAnswerSelection> LegacyAnswerSelections { get; set; }
 
         public virtual DbSet<Exam> Exams { get; set; }
 
