@@ -464,7 +464,19 @@ namespace Project.Infrastructure.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<DateTime?>("VoidedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("VoidedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("VoidReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.HasKey("ExamAttemptId");
+
+                    b.HasIndex("VoidedByUserId");
 
                     b.ToTable("ExamAttemptSubmissions", (string)null);
                 });
@@ -1327,6 +1339,11 @@ namespace Project.Infrastructure.Migrations
                         .HasForeignKey("Project.Domain.Entities.ExamAttemptSubmission", "ExamAttemptId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Project.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("VoidedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Attempt");
                 });

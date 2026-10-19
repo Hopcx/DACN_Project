@@ -28,5 +28,8 @@ public class ExamAttemptSubmission
     public decimal TotalMark { get; set; }
     public bool IsPassed { get; set; }
     public string AnswersJson { get; set; } = null!;
+    public DateTime? VoidedAtUtc { get; set; }
+    public Guid? VoidedByUserId { get; set; }
+    public string? VoidReason { get; set; }
     public ExamAttempt Attempt { get; set; } = null!;
 }

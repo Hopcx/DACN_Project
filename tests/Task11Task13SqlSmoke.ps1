@@ -8,6 +8,7 @@ function Sql([string]$query) {
 }
 if ((Sql 'SELECT DB_NAME();') -ne $Database) { throw 'Connection preflight failed.' }
 if ((Sql "SELECT COUNT(*) FROM dbo.__EFMigrationsHistory WHERE MigrationId='20261018063239_Task10TimeoutAndDuration';") -ne '1') { throw 'Task10 migration absent.' }
+if ((Sql "SELECT COUNT(*) FROM dbo.__EFMigrationsHistory WHERE MigrationId='20261019090000_Task11AttemptVoidAudit';") -ne '1') { throw 'Task11 void migration absent.' }
 $tag=[Guid]::NewGuid().ToString('N').Substring(0,10)
 $email="reportqa$tag@example.invalid"
 $password='Qa7'+[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(12)).ToLowerInvariant()
@@ -25,6 +26,10 @@ function Auth([string]$route,$body) {
 }
 function Get([string]$url,[string]$token) {
     $response=Invoke-WebRequest "$BaseUrl$url" -Method Get -Headers @{Authorization="Bearer $token"} -SkipCertificateCheck -SkipHttpErrorCheck
+    return @{status=[int]$response.StatusCode;body=($response.Content | ConvertFrom-Json)}
+}
+function Post([string]$url,[string]$token,$body) {
+    $response=Invoke-WebRequest "$BaseUrl$url" -Method Post -Headers @{Authorization="Bearer $token"} -SkipCertificateCheck -SkipHttpErrorCheck -ContentType 'application/json' -Body ($body | ConvertTo-Json -Compress)
     return @{status=[int]$response.StatusCode;body=($response.Content | ConvertFrom-Json)}
 }
 $student=[Guid]::Empty;$other=[Guid]::NewGuid();$admin=[Guid]::NewGuid();$exam=0;$class=0;$class2=0
@@ -82,9 +87,9 @@ VALUES(@a1,'$student',@s1,@exam,@variant,DATEADD(minute,-5,@now),DATEADD(hour,1,
 (@a5,'$other',@s1,@exam,@variant,DATEADD(minute,-5,@now),DATEADD(hour,1,@now),@now,N'submitted',0,N'{}',N'[]',5,1);
 INSERT dbo.ExamAttemptSubmissions(ExamAttemptId,SubmittedAtUtc,TimeTakenSeconds,TotalMark,IsPassed,AnswersJson)
 VALUES(@a1,@now,300,8,1,N'[]'),(@a2,@now,300,6,1,N'[]'),(@a3,@now,300,2,0,N'[]'),(@a5,@now,300,4,0,N'[]');
-SELECT CONCAT(@exam,',',@class,',',@class2,',',@a2,',',@a5);
+SELECT CONCAT(@exam,',',@class,',',@class2,',',@a1,',',@a2,',',@a5);
 "@
-    $parts=$ids.Split(',');$exam=[int]$parts[0];$class=[int]$parts[1];$class2=[int]$parts[2];$hiddenId=$parts[3];$otherId=$parts[4]
+    $parts=$ids.Split(',');$exam=[int]$parts[0];$class=[int]$parts[1];$class2=[int]$parts[2];$visibleId=$parts[3];$hiddenId=$parts[4];$otherId=$parts[5]
     $mine=Get '/web/attempts/mine?page=1&pageSize=2' $studentToken
     if ($mine.status -ne 200 -or $mine.body.data.totalCount -ne 4 -or @($mine.body.data.items).Count -ne 2) { throw 'Student pagination failed.' }
     $allMine=Get '/web/attempts/mine?page=1&pageSize=10' $studentToken
@@ -94,6 +99,10 @@ SELECT CONCAT(@exam,',',@class,',',@class2,',',@a2,',',@a5);
     $detail=Get "/web/attempts/$hiddenId" $studentToken
     if ($detail.status -ne 200 -or $null -ne $detail.body.data.result) { throw 'Hidden detail leaked result.' }
     if ((Get "/web/attempts/$otherId" $studentToken).status -ne 404) { throw 'Other student detail accessible.' }
+    if ((Get "/web/attempts/$otherId/review" $studentToken).status -ne 404) { throw 'Other student review accessible.' }
+    if ((Get "/web/attempts/$visibleId/review" $studentToken).status -ne 403) { throw 'Review before schedule end was released.' }
+    if ((Get "/web/attempts/$hiddenId/review" $studentToken).status -ne 403) { throw 'Hidden review was released.' }
+    if ((Get "/web/attempts/$visibleId/review" $adminToken).status -ne 403) { throw 'Admin can read personal review.' }
     if ((Get '/web/admin/attempt-reports' $studentToken).status -ne 403) { throw 'Student can read admin report.' }
     $report=Get "/web/admin/attempt-reports?page=1&pageSize=2&examId=$exam&classId=$class" $adminToken
     $s=$report.body.data.summary
@@ -112,14 +121,36 @@ SELECT CONCAT(@exam,',',@class,',',@class2,',',@a2,',',@a5);
       FROM dbo.ExamAttempts WHERE ExamId=$exam;"
     if ($sqlCounts -ne '5,1,4') { throw "SQL mismatch: $sqlCounts" }
     if ($Browser) {
-        $env:DACN_QA_EMAIL="admin$tag@example.invalid";$env:DACN_QA_PASSWORD=$password;$env:DACN_QA_TAG=$tag
+        $env:DACN_QA_EMAIL="admin$tag@example.invalid";$env:DACN_QA_PASSWORD=$password;$env:DACN_QA_TAG=$tag;$env:DACN_QA_ATTEMPT_ID=$visibleId
         try {
             & node ../DACN_FE/tests/adminReportBrowserSmoke.mjs
             if ($LASTEXITCODE -ne 0) { throw 'Admin browser smoke failed.' }
         } finally {
-            Remove-Item Env:DACN_QA_EMAIL,Env:DACN_QA_PASSWORD,Env:DACN_QA_TAG -ErrorAction SilentlyContinue
+            Remove-Item Env:DACN_QA_EMAIL,Env:DACN_QA_PASSWORD,Env:DACN_QA_TAG,Env:DACN_QA_ATTEMPT_ID -ErrorAction SilentlyContinue
         }
+    } else {
+        if ((Post "/web/admin/attempts/$visibleId/void" $studentToken @{reason='QA audit reason'}).status -ne 403) { throw 'Student could void result.' }
+        if ((Post "/web/admin/attempts/$visibleId/void" $adminToken @{reason=' '}).status -ne 400) { throw 'Blank void reason accepted.' }
+        if ((Post "/web/admin/attempts/$visibleId/void" $adminToken @{reason='QA audit reason'}).status -ne 200) { throw 'Admin void failed.' }
     }
+    $auditBefore=Sql "SELECT CONCAT(CONVERT(varchar(33),VoidedAtUtc,126),',',VoidedByUserId,',',VoidReason,',',TotalMark,',',IsPassed) FROM dbo.ExamAttemptSubmissions WHERE ExamAttemptId='$visibleId';"
+    if (-not $auditBefore.ToLowerInvariant().Contains("$admin,QA audit reason,8.00,1".ToLowerInvariant())) { throw "Void audit mismatch: $auditBefore" }
+    if ((Post "/web/admin/attempts/$visibleId/void" $adminToken @{reason='QA audit reason'}).status -ne 200) { throw 'Repeated void failed.' }
+    if ((Post "/web/admin/attempts/$visibleId/void" $adminToken @{reason='Different reason'}).status -ne 409) { throw 'Different repeat reason accepted.' }
+    $auditAfter=Sql "SELECT CONCAT(CONVERT(varchar(33),VoidedAtUtc,126),',',VoidedByUserId,',',VoidReason,',',TotalMark,',',IsPassed) FROM dbo.ExamAttemptSubmissions WHERE ExamAttemptId='$visibleId';"
+    if ($auditBefore -ne $auditAfter) { throw 'Repeated void changed audit or score.' }
+    $voidedDetail=Get "/web/attempts/$visibleId" $studentToken
+    if ($voidedDetail.body.data.state -ne 'voided' -or $null -ne $voidedDetail.body.data.result) { throw 'Voided detail leaked result.' }
+    if ((Get "/web/attempts/$visibleId/review" $studentToken).status -ne 403) { throw 'Voided review was released.' }
+    $voidedList=Get '/web/attempts/mine?state=voided' $studentToken
+    if ($voidedList.body.data.totalCount -ne 1 -or $voidedList.body.data.items[0].state -ne 'voided' -or $null -ne $voidedList.body.data.items[0].result) { throw 'Voided history failed.' }
+    $afterReport=Get "/web/admin/attempt-reports?examId=$exam&state=voided" $adminToken
+    if ($afterReport.body.data.summary.totalAttempts -ne 1 -or $afterReport.body.data.summary.voidedCount -ne 1 -or $afterReport.body.data.summary.finalizedCount -ne 0) { throw 'Voided filter failed.' }
+    $fullAfter=Get "/web/admin/attempt-reports?examId=$exam" $adminToken
+    $sum=$fullAfter.body.data.summary
+    if ($sum.totalAttempts -ne 5 -or $sum.voidedCount -ne 1 -or $sum.finalizedCount -ne 3 -or $sum.passedCount -ne 1 -or $sum.averageScore -ne 4 -or $sum.passPercent -ne 33.33) { throw "Post-void report mismatch: $($sum | ConvertTo-Json -Compress)" }
+    if ((Sql "SELECT CONCAT(COUNT(*),',',SUM(CASE WHEN VoidedAtUtc IS NOT NULL THEN 1 ELSE 0 END)) FROM dbo.ExamAttemptSubmissions WHERE ExamAttemptId IN (SELECT Id FROM dbo.ExamAttempts WHERE ExamId=$exam);") -ne '4,1') { throw 'SQL void count mismatch.' }
+    Write-Output 'PASS Task11 review authorization, void audit/idempotence, hidden result, history and report after void.'
     Write-Output "PASS Task11/13 API-SQL: student 4/other 1, hidden list/detail, owner 404, student admin 403; report total=5 finalized=4 active=1 timeout=1 hidden=1 pass=2 avg=5 rate=50; distribution=4; class/exam/subject and paging."
 }
 finally {

@@ -1,5 +1,15 @@
 # Ma trận chức năng Testify → DACN
 
+## Task11 xem lại bài / hủy kết quả — nghiệm thu bản sao 2026-10-19
+
+| Feature | Trạng thái | Bằng chứng và giới hạn |
+|---|---|---|
+| F20 Kết quả/lịch sử | IN_PROGRESS | Chrome → Vite → API → SQL copy đạt history owner/paging, kết quả ẩn ở list/detail/URL/reload; review chỉ mở sau `EndTime` với `AllowViewResult=true`, response và UI dùng snapshot dù Question/Answer nguồn đã sửa. Trước giờ kết thúc, kết quả ẩn, người khác và admin không có quyền review; sau hủy list/detail chỉ thấy `voided`, không có điểm/đáp án. Chưa đối soát và hiển thị lượt Testify cũ, chưa kiểm tình huống thu hồi membership sau chốt qua browser. |
+| F21 Hủy kết quả | IN_PROGRESS | AdminManagement hủy qua Chrome → API → SQL copy với lý do; audit ghi actor/UTC, điểm/đáp án gốc giữ nguyên. Hủy lặp cùng lý do giữ nguyên fingerprint, khác lý do 409; Student 403. Lượt hủy vẫn tính quota theo code/contract hiện tại; quy tắc hoàn lượt Testify chưa xác minh. Chưa nghiệm thu race hai admin hủy khác lý do hoặc rollback migration có dữ liệu audit. |
+| F22 Thống kê/phổ điểm | IN_PROGRESS | Fixture 5 lượt/4 submission: trước hủy finalized 4, đạt 2, trung bình 5, tỷ lệ 50%; sau hủy một lượt 8 điểm finalized 3, đạt 1, trung bình 4, tỷ lệ 33.33%, voided 1, total vẫn 5. Chrome admin và SQL đối chiếu, filter exam/class/subject/state và paging API đạt; không đếm đôi hai lớp. Chỉ số chỉ gồm DACN mới; chưa đối soát/union `DoingExam`/`Submission` lịch sử. |
+
+Các kết quả Task11/13 bên dưới là ảnh chụp trước triển khai review/void; dùng mục mới trên làm trạng thái hiện hành.
+
 ## Task11/Task13 — kết quả và báo cáo lượt DACN mới, 2026-10-18
 
 | Feature | Trạng thái | Bằng chứng và giới hạn |
