@@ -22,6 +22,17 @@ namespace Project.Infrastructure.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("Project.Domain.Entities.AttemptVisibilityEvent", b =>
+                {
+                    b.Property<Guid>("AttemptId").HasColumnType("uniqueidentifier");
+                    b.Property<Guid>("EventId").HasColumnType("uniqueidentifier");
+                    b.Property<bool>("IsCounted").HasColumnType("bit");
+                    b.Property<DateTime>("RecordedAtUtc").HasColumnType("datetime2");
+                    b.HasKey("AttemptId", "EventId");
+                    b.HasIndex("AttemptId", "RecordedAtUtc");
+                    b.ToTable("AttemptVisibilityEvents", (string)null);
+                });
+
             modelBuilder.Entity("Project.Domain.Entities.Answer", b =>
                 {
                     b.Property<int>("Id")
@@ -339,6 +350,16 @@ namespace Project.Infrastructure.Migrations
                     b.HasIndex("SubjectId");
 
                     b.ToTable("Exams");
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.AttemptVisibilityEvent", b =>
+                {
+                    b.HasOne("Project.Domain.Entities.ExamAttempt", "Attempt")
+                        .WithMany()
+                        .HasForeignKey("AttemptId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                    b.Navigation("Attempt");
                 });
 
             modelBuilder.Entity("Project.Domain.Entities.ExamActivityLog", b =>

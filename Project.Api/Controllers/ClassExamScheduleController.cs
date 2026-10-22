@@ -111,6 +111,14 @@ namespace Project.Api.Controllers
             if (schedule.Status == 1 && await _guard.StudentConflictAsync(schedule.Id,
                 schedule.StartTime, schedule.EndTime, new[] { dto.ClassId }))
                 return Conflict(ApiResponse<string>.Fail("Học viên đã được duyệt có lịch thi giao nhau"));
+            if (schedule.Status == 1)
+            {
+                var subjectId = await _db.Exams.Where(x => x.Id == schedule.ExamId)
+                    .Select(x => x.SubjectId).FirstAsync();
+                if (await _guard.ClassSubjectConflictAsync(schedule.Id, subjectId,
+                    schedule.StartTime, schedule.EndTime, new[] { dto.ClassId }))
+                    return Conflict(ApiResponse<string>.Fail("Lớp đã có lịch thi cùng môn giao nhau"));
+            }
             return null;
         }
 

@@ -4,7 +4,7 @@ using Project.Domain.Entities;
 
 namespace Project.Infrastructure.Persistence;
 
-public enum MembershipOutcome { Created, Updated, Removed, MissingClass, InactiveClass, MissingStudent, Duplicate, Full, MissingMembership, InvalidState, ScheduleConflict }
+public enum MembershipOutcome { Created, Updated, Removed, MissingClass, InactiveClass, MissingStudent, Duplicate, Full, MissingMembership, InvalidState, ScheduleConflict, ForbiddenOwner }
 public record MembershipResult(MembershipOutcome Outcome, ClassUser? Member = null);
 
 // Every membership write takes an update lock on its class row. This serializes
@@ -16,12 +16,13 @@ public class ClassMembershipStore
     public ClassMembershipStore(ProjectDACNDbContext db, ScheduleWriteGuard scheduleGuard)
     { _db = db; _scheduleGuard = scheduleGuard; }
 
-    public async Task<MembershipResult> JoinAsync(int classId, Guid studentId, bool approve, string? expectedCode = null)
+    public async Task<MembershipResult> JoinAsync(int classId, Guid studentId, bool approve, string? expectedCode = null, Guid? teacherId = null)
     {
         await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
         if (approve) await _scheduleGuard.AcquireAsync();
         var schoolClass = await LockedClassAsync(classId);
         if (schoolClass == null) return new(MembershipOutcome.MissingClass);
+        if (teacherId.HasValue && schoolClass.TeacherId != teacherId.Value) return new(MembershipOutcome.ForbiddenOwner);
         if (expectedCode != null && schoolClass.ClassCode != expectedCode) return new(MembershipOutcome.MissingClass);
         if (schoolClass.Status != 1) return new(MembershipOutcome.InactiveClass);
         if (!await _db.Users.AnyAsync(x => x.Id == studentId && x.LevelId == 4 && x.Status == 1 && x.EmailVerifiedAt != null))
@@ -39,13 +40,14 @@ public class ClassMembershipStore
         return new(MembershipOutcome.Created, member);
     }
 
-    public async Task<MembershipResult> ApproveAsync(int id)
+    public async Task<MembershipResult> ApproveAsync(int id, Guid? teacherId = null)
     {
         var classId = await _db.ClassUsers.Where(x => x.Id == id).Select(x => (int?)x.ClassId).FirstOrDefaultAsync();
         if (classId == null) return new(MembershipOutcome.MissingMembership);
         await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
         await _scheduleGuard.AcquireAsync();
         var schoolClass = await LockedClassAsync(classId.Value);
+        if (teacherId.HasValue && schoolClass?.TeacherId != teacherId.Value) return new(MembershipOutcome.ForbiddenOwner);
         if (schoolClass == null || schoolClass.Status != 1) return new(MembershipOutcome.InactiveClass);
         var member = await _db.ClassUsers.FirstOrDefaultAsync(x => x.Id == id);
         if (member == null) return new(MembershipOutcome.MissingMembership);
@@ -62,10 +64,12 @@ public class ClassMembershipStore
         return new(MembershipOutcome.Updated, member);
     }
 
-    public async Task<MembershipResult> RemoveAsync(int classId, Guid studentId)
+    public async Task<MembershipResult> RemoveAsync(int classId, Guid studentId, Guid? teacherId = null)
     {
         await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
-        if (await LockedClassAsync(classId) == null) return new(MembershipOutcome.MissingClass);
+        var schoolClass = await LockedClassAsync(classId);
+        if (schoolClass == null) return new(MembershipOutcome.MissingClass);
+        if (teacherId.HasValue && schoolClass.TeacherId != teacherId.Value) return new(MembershipOutcome.ForbiddenOwner);
         var member = await _db.ClassUsers.FirstOrDefaultAsync(x => x.ClassId == classId && x.UserId == studentId);
         if (member == null) return new(MembershipOutcome.MissingMembership);
         _db.ClassUsers.Remove(member);
