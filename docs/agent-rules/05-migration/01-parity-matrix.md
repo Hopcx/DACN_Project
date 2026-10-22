@@ -1,5 +1,18 @@
 # Ma trận chức năng Testify → DACN
 
+## Delta As-is A01–A06 — 22/10/2026
+
+| Feature | Trạng thái | Bằng chứng và giới hạn |
+| --- | --- | --- |
+| F05 Role/Teacher | IN_PROGRESS | Thêm policy `Teacher` theo level 3; `/web/teacher/classes` lọc owner từ claim. API clone đạt anonymous 401, Student 403, Teacher lớp khác 404; chưa Admin/Examiner và browser. |
+| F07 Lớp/thành viên | IN_PROGRESS | Teacher tra đúng email Student đã xác minh, thêm/duyệt/xóa qua `ClassMembershipStore` có owner check trong khóa lớp; FE `TeacherClassesPage`. API/SQL và Chrome FE lookup/add đạt, fixture sạch; chưa concurrency/capacity. |
+| F12 Excel câu hỏi | IN_PROGRESS | Template `.xlsx` v1, parse/validate toàn file, transaction Serializable, FE chọn file và xem lỗi. File thật qua API/SQL và Chrome FE đạt, gồm Student 403, invalid 400, valid 200, duplicate 409, aggregate 1 câu/3 đáp án, fixture sạch; chưa ma trận lỗi đầy đủ. |
+| F16 Lịch/gán lớp | IN_PROGRESS | Quyết định phạm vi cùng lớp; `Exam.SubjectId` chuẩn, guard kiểm trùng môn khi gán/sửa/kích hoạt, 409 riêng. API/SQL clone đạt cùng lớp giao giờ 409, khác lớp 201, chạm mép 201, update 409; chưa race/unknown/attempt/browser. |
+| F17 Lịch học viên | IN_PROGRESS | Giữ kiểm room/student và `[start,end)`; FE giữ form khi 409. Chưa browser hồi quy. |
+| F23 Rời tab | IN_PROGRESS | Chỉ visibility hidden, eventId/idempotency, server time/count, owner; bảng `AttemptVisibilityEvents` áp riêng clone, SQL rollback và API count/retry/closed đạt. Chrome FE với hidden giả lập/reload tăng count đúng. Không dùng count làm chế tài. Chưa chuyển tab thật/offline/two-tab/timeout. |
+
+Contract chi tiết: [06-as-is-additions](../04-contracts/06-as-is-additions.md). Nghiệm thu và phần chưa kiểm: [16-as-is-acceptance](16-as-is-acceptance.md). F20–F22 giữ scope legacy riêng.
+
 ## F20–F22 fixture kỹ thuật — 2026-10-19
 
 | Feature | Trạng thái | Bằng chứng và giới hạn |

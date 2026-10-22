@@ -212,6 +212,44 @@ public class StudentAttemptController : ControllerBase
         return Ok(ApiResponse<object>.Ok(PublicState(row, now)));
     }
 
+    [HttpGet("{id:guid}/visibility-count")]
+    public async Task<IActionResult> VisibilityCount(Guid id)
+    {
+        var userId = Actor(); if (userId == null) return Unauthorized();
+        if (await Owned(id, userId.Value) == null)
+            return NotFound(ApiResponse<string>.Fail("ATTEMPT_NOT_FOUND"));
+        return Ok(ApiResponse<object>.Ok(new { count = await _db.AttemptVisibilityEvents.CountAsync(x => x.AttemptId == id && x.IsCounted) }));
+    }
+
+    [HttpPost("{id:guid}/visibility-hidden")]
+    public async Task<IActionResult> VisibilityHidden(Guid id, [FromBody] VisibilityHiddenRequest request)
+    {
+        var userId = Actor(); if (userId == null) return Unauthorized();
+        if (request.EventId == Guid.Empty) return BadRequest(ApiResponse<string>.Fail("INVALID_EVENT_ID"));
+        await using var tx = await _db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+        await _guard.AcquireAsync();
+        var row = await Owned(id, userId.Value);
+        if (row == null) return NotFound(ApiResponse<string>.Fail("ATTEMPT_NOT_FOUND"));
+        var count = await _db.AttemptVisibilityEvents.CountAsync(x => x.AttemptId == id && x.IsCounted);
+        if (await _db.AttemptVisibilityEvents.AnyAsync(x => x.AttemptId == id && x.EventId == request.EventId))
+        {
+            await tx.CommitAsync();
+            return Ok(ApiResponse<object>.Ok(new { count, duplicate = true }));
+        }
+        var now = DateTime.UtcNow;
+        if (row.State != "inProgress" || AttemptTiming.IsExpired(now, row.DeadlineUtc))
+            return Conflict(ApiResponse<string>.Fail("ATTEMPT_CLOSED"));
+        // Simultaneous hidden events from separate tabs count as one event.
+        var recent = await _db.AttemptVisibilityEvents.AnyAsync(x => x.AttemptId == id && x.IsCounted &&
+            x.RecordedAtUtc >= now.AddSeconds(-1));
+        _db.AttemptVisibilityEvents.Add(new AttemptVisibilityEvent
+        { AttemptId = id, EventId = request.EventId, RecordedAtUtc = now, IsCounted = !recent });
+        await _db.SaveChangesAsync();
+        if (!recent) count++;
+        await tx.CommitAsync();
+        return Ok(ApiResponse<object>.Ok(new { count, duplicate = recent }));
+    }
+
     [HttpPut("{id:guid}/answers")]
     public async Task<IActionResult> Save(Guid id, [FromBody] SaveAttemptRequest request)
     {
@@ -255,3 +293,4 @@ public class StudentAttemptController : ControllerBase
 
 public sealed record SaveAttemptRequest(int Revision, IReadOnlyList<AttemptAnswerDto>? Answers);
 public sealed record SubmitAttemptRequest(int Revision);
+public sealed record VisibilityHiddenRequest(Guid EventId);

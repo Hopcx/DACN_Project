@@ -20,6 +20,7 @@ using Project.Infrastructure;
 
 AttemptSnapshotSmoke.Run();
 AttemptScoringSmoke.Run();
+QuestionWorkbookSmoke.Run();
 if (args.Contains("--attempt-snapshot")) return;
 
 var configuration = new ConfigurationBuilder()
@@ -38,6 +39,7 @@ services.AddProjectAuthorization();
 services.AddApplication();
 services.AddInfrastructure(configuration);
 services.AddScoped<IExamVariantService, ExamVariantStore>();
+services.AddScoped<AttemptFinalizer>();
 
 using var provider = services.BuildServiceProvider(validateScopes: true);
 using var firstScope = provider.CreateScope();
@@ -63,7 +65,8 @@ var controllerTypes = new[]
     typeof(UserPermissionController), typeof(UserController),
     typeof(RoomController), typeof(SubmissionController),
     typeof(ExamScheduleController), typeof(StudentScheduleController)
-    , typeof(QuestionController), typeof(AnswerController), typeof(ExamController)
+    , typeof(QuestionController), typeof(QuestionImportController), typeof(TeacherClassController),
+    typeof(StudentAttemptController), typeof(AnswerController), typeof(ExamController)
 };
 
 foreach (var controllerType in controllerTypes)
@@ -88,10 +91,14 @@ var anonymous = new ClaimsPrincipal(new ClaimsIdentity());
 var student = Principal("4");
 var admin = Principal("1");
 var examiner = Principal("2", "1");
+var teacher = Principal("3");
 if ((await authorization.AuthorizeAsync(anonymous, null, "AdminManagement")).Succeeded ||
     (await authorization.AuthorizeAsync(student, null, "AdminManagement")).Succeeded ||
     !(await authorization.AuthorizeAsync(admin, null, "AdminManagement")).Succeeded ||
     (await authorization.AuthorizeAsync(student, null, "ExamManagement")).Succeeded ||
+    (await authorization.AuthorizeAsync(admin, null, "Teacher")).Succeeded ||
+    (await authorization.AuthorizeAsync(student, null, "Teacher")).Succeeded ||
+    !(await authorization.AuthorizeAsync(teacher, null, "Teacher")).Succeeded ||
     !(await authorization.AuthorizeAsync(examiner, null, "ExamManagement")).Succeeded)
     throw new Exception("Authorization policy contract failed.");
 

@@ -37,6 +37,8 @@ namespace Project.Api.Extensions
                     policy.RequireAuthenticatedUser().RequireClaim("level_id", "1"));
                 options.AddPolicy("Student", policy =>
                     policy.RequireAuthenticatedUser().RequireClaim("level_id", "4"));
+                options.AddPolicy("Teacher", policy =>
+                    policy.RequireAuthenticatedUser().RequireClaim("level_id", "3"));
                 // 1: Quản lý bài thi
                 options.AddPolicy("ExamManagement", policy =>
                     policy.RequireClaim("permission", "1"));
