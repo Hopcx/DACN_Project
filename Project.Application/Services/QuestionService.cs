@@ -48,7 +48,7 @@ public class QuestionService : IQuestionService
     public async Task<List<QuestionSubjectDto>> GetSubjectsAsync() =>
         (await _repository.GetAvailableSubjectsAsync()).Select(x => new QuestionSubjectDto { Id = x.Id, Name = x.Name }).ToList();
 
-    private static void Validate(QuestionCreateDto dto)
+    public static void Validate(QuestionCreateDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.Content) || dto.Content.Trim().Length > 4000)
             throw new BadRequestException("Nội dung câu hỏi phải có từ 1 đến 4000 ký tự.");

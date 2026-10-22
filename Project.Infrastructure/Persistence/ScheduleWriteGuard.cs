@@ -43,6 +43,17 @@ public class ScheduleWriteGuard
             link.Class.ClassUsers.Any(member => member.Status == 1 && candidateUsers.Contains(member.UserId)));
     }
 
+    // Subject is sourced from Exam, never from the optional schedule display field.
+    // The caller holds the shared schedule write lock. Unknown legacy times conflict conservatively.
+    public Task<bool> ClassSubjectConflictAsync(int? excludedScheduleId, int subjectId,
+        DateTime startUtc, DateTime endUtc, IReadOnlyCollection<int> classIds) =>
+        classIds.Count == 0 ? Task.FromResult(false) :
+        _db.ClassExamSchedules.AnyAsync(link => classIds.Contains(link.ClassId) &&
+            link.ExamScheduleId != excludedScheduleId && link.ExamSchedule.Status == 1 &&
+            link.ExamSchedule.Exam.SubjectId == subjectId &&
+            (!link.ExamSchedule.IsTimeUtc ||
+                (link.ExamSchedule.StartTime < endUtc && startUtc < link.ExamSchedule.EndTime)));
+
     public async Task<bool> MembershipConflictAsync(int classId, Guid userId)
     {
         var targetSchedules = await _db.ClassExamSchedules.AsNoTracking()

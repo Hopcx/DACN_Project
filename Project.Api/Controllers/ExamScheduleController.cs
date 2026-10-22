@@ -57,6 +57,8 @@ namespace Project.Api.Controllers
                 return BadRequest(ApiResponse<string>.Fail("Phòng thi không tồn tại"));
             if (dto.SubjectId.HasValue && !await _db.Subjects.AnyAsync(x => x.Id == dto.SubjectId.Value))
                 return BadRequest(ApiResponse<string>.Fail("Môn học không tồn tại"));
+            if (dto.SubjectId.HasValue && !await _db.Exams.AnyAsync(x => x.Id == dto.ExamId && x.SubjectId == dto.SubjectId.Value))
+                return BadRequest(ApiResponse<string>.Fail("Môn của lịch phải trùng môn của bài thi"));
             return null;
         }
 
@@ -130,6 +132,12 @@ namespace Project.Api.Controllers
                 return Conflict(ApiResponse<string>.Fail("Phòng đã có lịch thi giao nhau"));
             if (dto.Status == 1 && await _guard.StudentConflictAsync(id, dto.StartTime, dto.EndTime, classIds))
                 return Conflict(ApiResponse<string>.Fail("Học viên đã được duyệt có lịch thi giao nhau"));
+            if (dto.Status == 1)
+            {
+                var subjectId = await _db.Exams.Where(x => x.Id == dto.ExamId).Select(x => x.SubjectId).FirstAsync();
+                if (await _guard.ClassSubjectConflictAsync(id, subjectId, dto.StartTime, dto.EndTime, classIds))
+                    return Conflict(ApiResponse<string>.Fail("Lớp đã có lịch thi cùng môn giao nhau"));
+            }
             schedule.ExamId = dto.ExamId; schedule.Title = dto.Title;
             schedule.StartTime = dto.StartTime; schedule.EndTime = dto.EndTime;
             schedule.Description = dto.Description; schedule.Status = dto.Status;
