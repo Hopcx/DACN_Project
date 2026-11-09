@@ -5,6 +5,7 @@
 | Feature | Trạng thái | Bằng chứng và giới hạn |
 | --- | --- | --- |
 | F05 Role/Teacher | IN_PROGRESS | Thêm policy `Teacher` theo level 3; `/web/teacher/classes` lọc owner từ claim. API clone đạt anonymous 401, Student 403, Teacher lớp khác 404; chưa Admin/Examiner và browser. |
+| F05b Teacher xem lịch/kết quả lớp mình | IN_PROGRESS | `/web/teacher/classes/{id}/schedules` và `/results` chỉ đọc, owner scoped, FE tab Lịch thi/Kết quả. API clone đạt 401/403/404 và 200 với lớp rỗng; chưa kiểm có dữ liệu attempt thật và browser. |
 | F07 Lớp/thành viên | IN_PROGRESS | Teacher tra đúng email Student đã xác minh, thêm/duyệt/xóa qua `ClassMembershipStore` có owner check trong khóa lớp; FE `TeacherClassesPage`. API/SQL và Chrome FE lookup/add đạt, fixture sạch; chưa concurrency/capacity. |
 | F12 Excel câu hỏi | IN_PROGRESS | Template `.xlsx` v1, parse/validate toàn file, transaction Serializable, FE chọn file và xem lỗi. File thật qua API/SQL và Chrome FE đạt, gồm Student 403, invalid 400, valid 200, duplicate 409, aggregate 1 câu/3 đáp án, fixture sạch; chưa ma trận lỗi đầy đủ. |
 | F16 Lịch/gán lớp | IN_PROGRESS | Quyết định phạm vi cùng lớp; `Exam.SubjectId` chuẩn, guard kiểm trùng môn khi gán/sửa/kích hoạt, 409 riêng. API/SQL clone đạt cùng lớp giao giờ 409, khác lớp 201, chạm mép 201, update 409; chưa race/unknown/attempt/browser. |

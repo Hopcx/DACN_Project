@@ -46,7 +46,16 @@ namespace Project.Api
                 builder.Host.UseSerilog();
 
                 // Đăng ký services
-                builder.Services.AddControllers();
+                builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
+                {
+                    // Lỗi model binding/validation trả về cùng định dạng ApiResponse, thông báo tiếng Việt.
+                    options.InvalidModelStateResponseFactory = context =>
+                    {
+                        var messages = Project.Api.Services.ValidationMessages.Collect(context.ModelState);
+                        return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(
+                            new { success = false, message = string.Join(" ", messages), data = messages });
+                    };
+                });
 
                 // ===== CÁCH CŨ: Không có FluentValidation và AutoMapper (đã comment) =====
                 //builder.Services.AddApplication();
@@ -73,6 +82,15 @@ namespace Project.Api
                 builder.Services.AddRateLimiter(options =>
                 {
                     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+                    options.OnRejected = async (context, token) =>
+                    {
+                        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                        await context.HttpContext.Response.WriteAsJsonAsync(new
+                        {
+                            success = false,
+                            message = "Bạn thao tác quá nhanh. Vui lòng đợi khoảng 1 phút rồi thử lại."
+                        }, token);
+                    };
                     options.AddPolicy("auth-public", context => RateLimitPartition.GetFixedWindowLimiter(
                         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                         _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));

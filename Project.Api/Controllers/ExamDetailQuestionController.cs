@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Project.Application.Common;
 using Project.Application.DTOs.ExamDetailQuestionDTO;
@@ -6,6 +7,7 @@ using Project.Application.Interfaces.Services;
 namespace Project.Api.Controllers
 {
     [ApiController]
+    [Authorize(Policy = "ExamManagement")]
     [Route("web/exam-detail-questions")]
     [Microsoft.AspNetCore.Authorization.Authorize(Policy = "ExamManagement")]
     public class ExamDetailQuestionController : ControllerBase

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Project.Application.Common;
 using Project.Application.DTOs.ExamDTO;
@@ -8,6 +9,7 @@ using System.Security.Claims;
 namespace Project.Api.Controllers
 {
     [ApiController]
+    [Authorize(Policy = "ExamManagement")]
     [Route("web/exams")]
     [Microsoft.AspNetCore.Authorization.Authorize(Policy = "ExamManagement")]
     public class ExamController : ControllerBase

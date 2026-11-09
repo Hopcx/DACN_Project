@@ -41,3 +41,14 @@ Theo quyết định người dùng 22/10/2026, chỉ `document.visibilitychange
 ## A04 — Same-subject class overlap
 
 Theo quyết định người dùng 22/10/2026, một **lớp** không có hai lịch **hoạt động** cùng môn giao giờ. Môn chuẩn là `Exam.SubjectId`; `ExamSchedule.SubjectId` nếu có phải trùng. Khoảng giao nhau là `[start,end)`, nên chạm mép hợp lệ. Khi gán lớp hoặc sửa/kích hoạt lịch đã gán, kiểm trong transaction dưới `ScheduleWriteGuard`; xung đột trả 409 `Lớp đã có lịch thi cùng môn giao nhau`. Lịch timezone unknown được coi là xung đột bảo thủ. Tạo lịch chưa gán không thể xung đột theo lớp; gán lớp về sau sẽ kiểm. Phòng và học viên giữ kiểm riêng.
+
+## O07 — Teacher read-only schedules/results (22/10/2026)
+
+Cùng policy `Teacher` và quy tắc owner (lớp khác trả 404, anonymous 401, Admin/Student 403).
+
+| Method | Route | Response |
+| --- | --- | --- |
+| GET | `/web/teacher/classes/{classId}/schedules` | Lịch được gán cho lớp: `id,title,examName,subjectName,roomName,startTime,endTime,timeZoneStatus,status` |
+| GET | `/web/teacher/classes/{classId}/results` | Tối đa 500 lượt của học viên đã duyệt (`ClassUsers.Status=1`) trong lịch của lớp: tên, email, bài thi, thời gian, `state`, `totalMark`, `isPassed` |
+
+Lượt đã hủy trả `state=voided` và `totalMark/isPassed=null`. Không trả đáp án hay snapshot. Học viên chưa được duyệt hoặc đã rời lớp không xuất hiện.

@@ -35,28 +35,30 @@ namespace Project.Api.Extensions
                     .Build();
                 options.AddPolicy("AdminManagement", policy =>
                     policy.RequireAuthenticatedUser().RequireClaim("level_id", "1"));
+                // Admin (level_id = 1) là quyền cao nhất: vượt qua mọi policy bên dưới.
                 options.AddPolicy("Student", policy =>
-                    policy.RequireAuthenticatedUser().RequireClaim("level_id", "4"));
+                    policy.RequireAuthenticatedUser().RequireAssertion(c => IsAdmin(c) || HasLevel(c, "4")));
                 options.AddPolicy("Teacher", policy =>
-                    policy.RequireAuthenticatedUser().RequireClaim("level_id", "3"));
+                    policy.RequireAuthenticatedUser().RequireAssertion(c => IsAdmin(c) || HasLevel(c, "3")));
                 // 1: Quản lý bài thi
                 options.AddPolicy("ExamManagement", policy =>
-                    policy.RequireClaim("permission", "1"));
-
+                    policy.RequireAssertion(c => IsAdmin(c) || HasPermission(c, "1")));
                 // 2: Quản lý câu hỏi và đáp án
                 options.AddPolicy("QuestionManagement", policy =>
-                    policy.RequireClaim("permission", "2"));
-
+                    policy.RequireAssertion(c => IsAdmin(c) || HasPermission(c, "2")));
                 // 3: Quản lý môn học
                 options.AddPolicy("SubjectManagement", policy =>
-                    policy.RequireClaim("permission", "3"));
-
+                    policy.RequireAssertion(c => IsAdmin(c) || HasPermission(c, "3")));
                 // 4: Quản lý lịch thi
                 options.AddPolicy("ScheduleManagement", policy =>
-                    policy.RequireClaim("permission", "4"));
+                    policy.RequireAssertion(c => IsAdmin(c) || HasPermission(c, "4")));
             });
 
             return services;
         }
+
+        private static bool HasLevel(AuthorizationHandlerContext c, string level) => c.User.HasClaim("level_id", level);
+        private static bool IsAdmin(AuthorizationHandlerContext c) => HasLevel(c, "1");
+        private static bool HasPermission(AuthorizationHandlerContext c, string id) => c.User.HasClaim("permission", id);
     }
 }

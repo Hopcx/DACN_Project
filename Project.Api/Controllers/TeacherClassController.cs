@@ -26,7 +26,7 @@ public class TeacherClassController : ControllerBase
     public async Task<IActionResult> Mine()
     {
         if (!TryTeacher(out var teacherId)) return Unauthorized();
-        var rows = await _db.Classes.AsNoTracking().Where(x => x.TeacherId == teacherId)
+        var rows = await _db.Classes.AsNoTracking().Where(x => IsAdmin || x.TeacherId == teacherId)
             .OrderBy(x => x.Name).ThenBy(x => x.Id)
             .Select(x => new { x.Id, x.Name, x.ClassCode, x.Description, x.Capacity,
                 x.SubjectId, SubjectName = x.Subject != null ? x.Subject.Name : null, x.Status })
@@ -75,7 +75,7 @@ public class TeacherClassController : ControllerBase
             .Where(x => x.Email == normalized && x.LevelId == 4 && x.Status == 1 && x.EmailVerifiedAt != null)
             .Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
         if (studentId == null) return NotFound(ApiResponse<string>.Fail("Không tìm thấy học viên đã xác minh email"));
-        return WriteResult(await _membership.JoinAsync(classId, studentId.Value, true, teacherId: teacherId), true);
+        return WriteResult(await _membership.JoinAsync(classId, studentId.Value, true, teacherId: Scope(teacherId)), true);
     }
 
     [HttpPost("{classId:int}/members/{membershipId:int}/approve")]
@@ -85,7 +85,7 @@ public class TeacherClassController : ControllerBase
         if (!await OwnsAsync(classId, teacherId)) return NotFound(ApiResponse<string>.Fail("Lớp không tồn tại"));
         if (!await _db.ClassUsers.AnyAsync(x => x.Id == membershipId && x.ClassId == classId))
             return NotFound(ApiResponse<string>.Fail("Thành viên không tồn tại"));
-        return WriteResult(await _membership.ApproveAsync(membershipId, teacherId), false);
+        return WriteResult(await _membership.ApproveAsync(membershipId, Scope(teacherId)), false);
     }
 
     [HttpDelete("{classId:int}/members/{membershipId:int}")]
@@ -97,11 +97,65 @@ public class TeacherClassController : ControllerBase
             .Where(x => x.Id == membershipId && x.ClassId == classId)
             .Select(x => (Guid?)x.UserId).FirstOrDefaultAsync();
         if (studentId == null) return NotFound(ApiResponse<string>.Fail("Thành viên không tồn tại"));
-        return WriteResult(await _membership.RemoveAsync(classId, studentId.Value, teacherId), false);
+        return WriteResult(await _membership.RemoveAsync(classId, studentId.Value, Scope(teacherId)), false);
     }
 
+    // Read-only: schedules assigned to a class this teacher owns.
+    [HttpGet("{classId:int}/schedules")]
+    public async Task<IActionResult> Schedules(int classId)
+    {
+        if (!TryTeacher(out var teacherId)) return Unauthorized();
+        if (!await OwnsAsync(classId, teacherId)) return NotFound(ApiResponse<string>.Fail("Lớp không tồn tại"));
+        var rows = await _db.ClassExamSchedules.AsNoTracking().Where(x => x.ClassId == classId)
+            .OrderBy(x => x.ExamSchedule.StartTime).ThenBy(x => x.Id)
+            .Select(x => new
+            {
+                id = x.ExamScheduleId, title = x.ExamSchedule.Title, examName = x.ExamSchedule.Exam.Name,
+                subjectName = x.ExamSchedule.Subject != null ? x.ExamSchedule.Subject.Name : null,
+                roomName = x.ExamSchedule.Room != null ? x.ExamSchedule.Room.Name : null,
+                startTime = x.ExamSchedule.StartTime, endTime = x.ExamSchedule.EndTime,
+                timeZoneStatus = x.ExamSchedule.IsTimeUtc ? "utc" : "unknown", status = x.ExamSchedule.Status
+            }).ToListAsync();
+        return Ok(ApiResponse<object>.Ok(rows));
+    }
+
+    // Read-only results of approved members in schedules assigned to this teacher's class.
+    // Scores only; question/answer review is never exposed here. Voided attempts show no score.
+    [HttpGet("{classId:int}/results")]
+    public async Task<IActionResult> Results(int classId)
+    {
+        if (!TryTeacher(out var teacherId)) return Unauthorized();
+        if (!await OwnsAsync(classId, teacherId)) return NotFound(ApiResponse<string>.Fail("Lớp không tồn tại"));
+        var rows = await (from a in _db.ExamAttempts.AsNoTracking()
+                          join cs in _db.ClassExamSchedules.AsNoTracking() on a.ExamScheduleId equals cs.ExamScheduleId
+                          join cu in _db.ClassUsers.AsNoTracking() on new { cs.ClassId, a.UserId } equals new { cu.ClassId, cu.UserId }
+                          where cs.ClassId == classId && cu.Status == 1
+                          orderby a.StartedAtUtc descending
+                          select new
+                          {
+                              attemptId = a.Id, studentName = cu.User.FullName, studentEmail = cu.User.Email,
+                              scheduleTitle = cs.ExamSchedule.Title, examName = cs.ExamSchedule.Exam.Name,
+                              startedAt = a.StartedAtUtc, submittedAt = a.Submission != null ? (DateTime?)a.Submission.SubmittedAtUtc : null,
+                              state = a.Submission != null && a.Submission.VoidedAtUtc != null ? "voided" : a.State,
+                              totalMark = a.Submission != null && a.Submission.VoidedAtUtc == null ? (decimal?)a.Submission.TotalMark : null,
+                              isPassed = a.Submission != null && a.Submission.VoidedAtUtc == null ? (bool?)a.Submission.IsPassed : null
+                          }).Take(500).ToListAsync();
+        var data = rows.Select(r => new
+        {
+            r.attemptId, r.studentName, r.studentEmail, r.scheduleTitle, r.examName,
+            startedAt = DateTime.SpecifyKind(r.startedAt, DateTimeKind.Utc),
+            submittedAt = r.submittedAt.HasValue ? (DateTime?)DateTime.SpecifyKind(r.submittedAt.Value, DateTimeKind.Utc) : null,
+            r.state, r.totalMark, r.isPassed
+        });
+        return Ok(ApiResponse<object>.Ok(data));
+    }
+
+    // Admin (level 1) là quyền cao nhất: thao tác được trên mọi lớp, không bị giới hạn theo giảng viên phụ trách.
+    private bool IsAdmin => User.HasClaim("level_id", "1");
+    private Guid? Scope(Guid teacherId) => IsAdmin ? null : teacherId;
+
     private Task<bool> OwnsAsync(int classId, Guid teacherId) =>
-        _db.Classes.AnyAsync(x => x.Id == classId && x.TeacherId == teacherId);
+        _db.Classes.AnyAsync(x => x.Id == classId && (IsAdmin || x.TeacherId == teacherId));
 
     private IActionResult WriteResult(MembershipResult result, bool created) => result.Outcome switch
     {

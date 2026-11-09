@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Project.Application.Common;
 using Project.Application.DTOs.UserPermissionDTO;
@@ -8,6 +9,7 @@ using Project.Infrastructure.Persistence;
 namespace Project.Api.Controllers
 {
     [ApiController]
+    [Authorize(Policy = "AdminManagement")]
     [Route("web/user-permissions")]
     [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminManagement")]
     public class UserPermissionController : ControllerBase
