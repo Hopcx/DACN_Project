@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Project.Application.Common;
 using Project.Application.DTOs.ClassDTO;
@@ -10,6 +11,7 @@ using System.Data;
 namespace Project.Api.Controllers
 {
     [ApiController]
+    [Authorize(Policy = "AdminManagement")]
     [Route("web/classes")]
     [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminManagement")]
     public class ClassController : ControllerBase

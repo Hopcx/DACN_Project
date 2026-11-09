@@ -36,15 +36,15 @@ FACT phản ánh commit đã đọc. REQUIRED là quy tắc triển khai trên c
 | ID | Trạng thái | Nội dung |
 |---|---|---|
 | O01 | RESOLVED | URL đã xác nhận; dùng default branch master BE, main FE, pin SHA trong README |
-| O02 | OPEN | Có migrate dữ liệu Testify cũ hay dùng database mới? |
-| O03 | OPEN | FillAnswer, ranked, báo cáo placeholder có phải làm ngay? |
+| O02 | RESOLVED 2026-10-22 | Không chuyển dữ liệu Testify. DACN chạy trên DB mới; `ProjectDACN` nguồn có 0 Exam/Submission nên không có gì để ETL. Projection legacy và fixture F20–F22 giữ nguyên làm công cụ kỹ thuật, không xem là dữ liệu thật. Muốn ETL sau này phải mở task riêng với backup và dry-run. |
+| O03 | RESOLVED 2026-10-22 | Không làm FillAnswer (loại 4) và xếp hạng. Testify chỉ seed loại 1–3, `Ranked.razor` không tải dữ liệu. API tiếp tục từ chối loại 4. Báo cáo placeholder chỉ giữ báo cáo lượt DACN thật. |
 | O04 | RESOLVED baseline | FE đã có Ant Design/Tailwind; tiếp tục dùng, không cần hỏi chọn lại UI library |
 | O05 | RESOLVED cho lượt DACN mới | Chấm chính xác tập đáp án, không điểm từng phần; decimal ToEven hai chữ số, đạt theo điểm trước làm tròn; tính lượt khi start transaction commit. Lượt Testify cũ giữ nguyên. |
 | O06 | RESOLVED cho lượt DACN mới | Deadline UTC cố định = min(start+duration, scheduleEnd); đúng deadline đã quá hạn. |
-| O07 | OPEN | Quyền Teacher; public registration có được phép không, role mặc định nào |
-| O08 | OPEN | Chính sách sửa lịch/đề đã có người thi |
-| O09 | OPEN | Timezone dữ liệu DateTime cũ; không tự chuyển UTC |
-| O10 | OPEN | Concurrent users, deployment, SLA và retention |
+| O07 | RESOLVED 2026-10-22 | Teacher (level 3) chỉ thao tác trên lớp có `Classes.TeacherId` trùng claim: thêm/duyệt/xóa thành viên theo email, xem lịch thi và kết quả điểm (chỉ đọc, không xem đáp án, lượt hủy không hiện điểm) của học viên đã duyệt. Teacher không tạo câu hỏi, bài thi, lịch; việc đó theo permission 1/2/4 cấp cho Admin/Examiner. Đăng ký công khai chỉ tạo Student, email phải xác minh. |
+| O08 | RESOLVED 2026-10-22 | Khóa cứng, không sửa tại chỗ. Mã đề công khai hoặc đã có lượt thi không được sửa; lịch đã có attempt không được đổi giờ/phòng/gán lớp. Muốn thay đổi thì tạo bài thi/lịch mới. Lượt đang làm luôn dùng snapshot, nên sửa ngân hàng câu hỏi không ảnh hưởng bài đã bắt đầu. |
+| O09 | RESOLVED 2026-10-22 | Dữ liệu `DateTime` cũ không có thông tin múi giờ được coi là giờ Việt Nam (UTC+7) khi và chỉ khi có ETL được duyệt; cho đến lúc đó giữ `IsTimeUtc=0` và FE hiển thị "chưa rõ múi giờ". Mọi bản ghi mới lưu UTC, FE hiển thị giờ Việt Nam. `Exam.Duration` tính bằng phút. |
+| O10 | RESOLVED 2026-10-22 | Mục tiêu triển khai: một backend + SQL Server, cùng origin qua HTTPS reverse proxy, tối đa khoảng 300 thí sinh đồng thời, SMTP cấu hình bằng biến môi trường. Giới hạn tốc độ auth theo tiến trình nên nếu chạy nhiều instance cần chuyển lên ingress. Giữ log kiểm toán 12 tháng và attempt/kết quả không xóa. Chưa có SLA, chưa dùng Redis hay microservice. |
 | O11 | OPEN | Agent chính là Codex/Cursor/Copilot để đóng gói native rule adapters |
 
 Tiếp tục phần độc lập đã đủ bằng chứng; chỉ hỏi khi quyết định thay đổi semantics. Xem [audit](06-codebase-audit.md) cho thứ tự blocker cần xử lý. Nguồn vòng đời framework ở [external sources](05-external-sources.md), tách khỏi version hiện tại trong csproj.

@@ -87,6 +87,15 @@ SELECT CONCAT(@a,',',CONVERT(int,SCOPE_IDENTITY()));"
     if ((Sql "SELECT Status FROM dbo.ClassUsers WHERE Id=$membershipId;") -ne '1') { throw 'Approval not persisted.' }
     Expect (Request 'DELETE' "/web/teacher/classes/$classA/members/$membershipId" $teacherToken).status 200 'remove Student'
     if ((Sql "SELECT COUNT(*) FROM dbo.ClassUsers WHERE Id=$membershipId;") -ne '0') { throw 'Membership not removed.' }
+    # O07: Teacher read-only schedules/results, owner scoped, no answer review.
+    foreach ($suffix in 'schedules', 'results') {
+        Expect (Request 'GET' "/web/teacher/classes/$classA/$suffix").status 401 "anonymous $suffix"
+        Expect (Request 'GET' "/web/teacher/classes/$classA/$suffix" $studentToken).status 403 "Student $suffix"
+        Expect (Request 'GET' "/web/teacher/classes/$classB/$suffix" $teacherToken).status 404 "other Teacher $suffix"
+        $ok = Request 'GET' "/web/teacher/classes/$classA/$suffix" $teacherToken
+        Expect $ok.status 200 "Teacher $suffix"
+        if (@($ok.data.data).Count -ne 0) { throw "Unexpected $suffix rows for an empty class." }
+    }
     if ($Browser) {
         $env:DACN_QA_EMAIL = $teacherEmail
         $env:DACN_QA_PASSWORD = $password
