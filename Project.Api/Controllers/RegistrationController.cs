@@ -40,18 +40,22 @@ public class RegistrationController : ControllerBase
         var email = request.Email.Trim().ToLowerInvariant();
         var userName = request.UserName.Trim();
         var phone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
-        if (string.IsNullOrWhiteSpace(request.FullName) || string.IsNullOrWhiteSpace(request.Address) ||
-            userName.Length < 6 || request.DateOfBirth == default ||
-            request.DateOfBirth.Date > DateTime.UtcNow.Date ||
-            request.DateOfBirth.Date < new DateTime(1753, 1, 1) ||
-            await _db.Users.AnyAsync(x => x.Email.ToLower() == email || x.UserName == userName ||
+        if (string.IsNullOrWhiteSpace(request.FullName)) return BadRequest(ApiResponse<string>.Fail("Vui lòng nhập họ và tên."));
+        if (string.IsNullOrWhiteSpace(request.Address)) return BadRequest(ApiResponse<string>.Fail("Vui lòng nhập địa chỉ."));
+        if (userName.Length < 6) return BadRequest(ApiResponse<string>.Fail("Tên đăng nhập phải có từ 6 đến 100 ký tự."));
+        if (request.DateOfBirth == default) return BadRequest(ApiResponse<string>.Fail("Vui lòng chọn ngày sinh."));
+        if (request.DateOfBirth.Date > DateTime.UtcNow.Date.AddDays(1))
+            return BadRequest(ApiResponse<string>.Fail("Ngày sinh không được ở tương lai."));
+        if (request.DateOfBirth.Date < new DateTime(1900, 1, 1))
+            return BadRequest(ApiResponse<string>.Fail("Ngày sinh không hợp lệ."));
+        if (await _db.Users.AnyAsync(x => x.Email.ToLower() == email || x.UserName == userName ||
                 (phone != null && x.PhoneNumber == phone)))
-            return Conflict(ApiResponse<string>.Fail("Thông tin đăng ký không hợp lệ hoặc đã được sử dụng"));
+            return Conflict(ApiResponse<string>.Fail("Email, tên đăng nhập hoặc số điện thoại đã được sử dụng. Vui lòng kiểm tra lại hoặc đăng nhập."));
 
         var studentLevelId = await _db.Levels.Where(x => x.Name == "Student" && x.Status == 1)
             .Select(x => (int?)x.Id).FirstOrDefaultAsync();
         if (studentLevelId == null)
-            return StatusCode(503, ApiResponse<string>.Fail("Chưa cấu hình vai trò Student"));
+            return StatusCode(503, ApiResponse<string>.Fail("Hệ thống chưa được cấu hình vai trò học viên. Vui lòng liên hệ quản trị viên."));
 
         var user = new User
         {
@@ -74,12 +78,12 @@ public class RegistrationController : ControllerBase
             try { await _db.SaveChangesAsync(); }
             catch (DbUpdateException)
             {
-                return Conflict(ApiResponse<string>.Fail("Thông tin đăng ký không hợp lệ hoặc đã được sử dụng"));
+                return Conflict(ApiResponse<string>.Fail("Email, tên đăng nhập hoặc số điện thoại đã được sử dụng. Vui lòng kiểm tra lại hoặc đăng nhập."));
             }
             await transaction.CommitAsync();
         }
         await SendVerificationAsync(email, rawToken);
-        return Accepted(ApiResponse<string>.Ok(string.Empty, "Nếu đăng ký hợp lệ, vui lòng kiểm tra email để xác minh"));
+        return Accepted(ApiResponse<string>.Ok(string.Empty, "Đăng ký thành công. Vui lòng kiểm tra email để xác minh tài khoản trước khi đăng nhập."));
     }
 
     [HttpPost("verify-email")]
@@ -90,14 +94,14 @@ public class RegistrationController : ControllerBase
         var token = await _db.EmailVerificationTokens.AsNoTracking()
             .FirstOrDefaultAsync(x => x.TokenHash == hash);
         if (token == null || token.ConsumedAt != null || token.ExpiresAt <= DateTime.UtcNow)
-            return BadRequest(ApiResponse<string>.Fail("Token xác minh không hợp lệ hoặc đã hết hạn"));
+            return BadRequest(ApiResponse<string>.Fail("Liên kết xác minh không hợp lệ hoặc đã hết hạn. Vui lòng yêu cầu gửi lại email xác minh."));
 
         await using var transaction = await _db.Database.BeginTransactionAsync();
         var updated = await _db.EmailVerificationTokens.Where(x => x.Id == token.Id &&
                 x.ConsumedAt == null && x.ExpiresAt > DateTime.UtcNow)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.ConsumedAt, DateTime.UtcNow));
         if (updated != 1)
-            return BadRequest(ApiResponse<string>.Fail("Token xác minh đã được sử dụng"));
+            return BadRequest(ApiResponse<string>.Fail("Liên kết xác minh đã được sử dụng."));
         await _db.Users.Where(x => x.Id == token.UserId && x.EmailVerifiedAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.EmailVerifiedAt, DateTime.UtcNow));
         await transaction.CommitAsync();
@@ -152,24 +156,44 @@ public class RegistrationController : ControllerBase
 
 public class RegisterStudentRequest
 {
-    [Required, StringLength(100, MinimumLength = 1)] public string FullName { get; set; } = "";
-    [Required, StringLength(100, MinimumLength = 6), RegularExpression("^[a-zA-Z0-9_]+$")]
+    [Required(ErrorMessage = "Vui lòng nhập họ và tên.")]
+    [StringLength(100, MinimumLength = 1, ErrorMessage = "Họ và tên không được vượt quá 100 ký tự.")]
+    public string FullName { get; set; } = "";
+
+    [Required(ErrorMessage = "Vui lòng nhập tên đăng nhập.")]
+    [StringLength(100, MinimumLength = 6, ErrorMessage = "Tên đăng nhập phải có từ 6 đến 100 ký tự.")]
+    [RegularExpression("^[a-zA-Z0-9_]+$", ErrorMessage = "Tên đăng nhập chỉ gồm chữ cái không dấu, số và dấu gạch dưới.")]
     public string UserName { get; set; } = "";
-    [Required, EmailAddress, StringLength(450)] public string Email { get; set; } = "";
-    [Required, StringLength(128, MinimumLength = 8), RegularExpression(@"^(?=.*[A-Z])(?=.*[a-z])(?=.*\d).+$")]
+
+    [Required(ErrorMessage = "Vui lòng nhập email.")]
+    [EmailAddress(ErrorMessage = "Email không đúng định dạng (ví dụ: ten@example.com).")]
+    [StringLength(450, ErrorMessage = "Email quá dài.")]
+    public string Email { get; set; } = "";
+
+    [Required(ErrorMessage = "Vui lòng nhập mật khẩu.")]
+    [StringLength(128, MinimumLength = 8, ErrorMessage = "Mật khẩu phải có từ 8 đến 128 ký tự.")]
+    [RegularExpression(@"^(?=.*[A-Z])(?=.*[a-z])(?=.*\d).+$", ErrorMessage = "Mật khẩu phải có ít nhất một chữ hoa, một chữ thường và một chữ số.")]
     public string Password { get; set; } = "";
-    [RegularExpression(@"^[0-9]{10,11}$")] public string? PhoneNumber { get; set; }
-    [Required, StringLength(200, MinimumLength = 1)] public string Address { get; set; } = "";
+
+    [RegularExpression(@"^[0-9]{10,11}$", ErrorMessage = "Số điện thoại phải gồm 10 hoặc 11 chữ số.")]
+    public string? PhoneNumber { get; set; }
+
+    [Required(ErrorMessage = "Vui lòng nhập địa chỉ.")]
+    [StringLength(200, MinimumLength = 1, ErrorMessage = "Địa chỉ không được vượt quá 200 ký tự.")]
+    public string Address { get; set; } = "";
+
     public DateTime DateOfBirth { get; set; }
-    [Required] public bool? Sex { get; set; }
+
+    [Required(ErrorMessage = "Vui lòng chọn giới tính.")]
+    public bool? Sex { get; set; }
 }
 
 public class VerifyEmailRequest
 {
-    [Required] public string Token { get; set; } = "";
+    [Required(ErrorMessage = "Thiếu mã xác minh email.")] public string Token { get; set; } = "";
 }
 
 public class ResendVerificationRequest
 {
-    [Required, EmailAddress] public string Email { get; set; } = "";
+    [Required(ErrorMessage = "Vui lòng nhập email."), EmailAddress(ErrorMessage = "Email không đúng định dạng.")] public string Email { get; set; } = "";
 }

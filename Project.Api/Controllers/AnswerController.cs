@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Project.Application.Common;
 using Project.Application.DTOs.AnswerCreateDto;
@@ -9,6 +10,7 @@ namespace Project.Api.Controllers
 {
     
     [ApiController]
+    [Authorize(Policy = "AdminManagement")]
     [Route("web/answers")]
     [Microsoft.AspNetCore.Authorization.Authorize(Policy = "QuestionManagement")]
     public class AnswerController : ControllerBase

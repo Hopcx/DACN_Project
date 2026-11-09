@@ -33,14 +33,14 @@ public class AuthCsrfFilter : IAsyncActionFilter
             allowed = allowed.Concat(["https://localhost:5173"]).ToArray();
         if (string.IsNullOrWhiteSpace(origin) || !allowed.Contains(origin, StringComparer.OrdinalIgnoreCase))
         {
-            context.Result = new ObjectResult(ApiResponse<string>.Fail("Origin không hợp lệ")) { StatusCode = 403 };
+            context.Result = new ObjectResult(ApiResponse<string>.Fail("Nguồn truy cập không được phép. Vui lòng tải lại trang.")) { StatusCode = 403 };
             return;
         }
 
         try { await _antiforgery.ValidateRequestAsync(context.HttpContext); }
         catch (AntiforgeryValidationException)
         {
-            context.Result = new ObjectResult(ApiResponse<string>.Fail("CSRF token không hợp lệ")) { StatusCode = 403 };
+            context.Result = new ObjectResult(ApiResponse<string>.Fail("Phiên làm việc đã hết hạn. Vui lòng tải lại trang và thử lại.")) { StatusCode = 403 };
             return;
         }
         await next();

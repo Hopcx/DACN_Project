@@ -60,12 +60,12 @@ namespace Project.Api.Controllers
             
             if (user == null)
             {
-                return Unauthorized(ApiResponse<string>.Fail("Invalid credentials"));
+                return Unauthorized(ApiResponse<string>.Fail("Tên đăng nhập/email hoặc mật khẩu không đúng."));
             }
 
             if (user.Status != 1 || user.EmailVerifiedAt == null)
             {
-                return Unauthorized(ApiResponse<string>.Fail("Tài khoản chưa xác minh hoặc không hoạt động"));
+                return Unauthorized(ApiResponse<string>.Fail("Tài khoản chưa xác minh email hoặc đã bị khóa. Vui lòng kiểm tra email xác minh hoặc liên hệ quản trị viên."));
             }
 
             // Lấy danh sách PermissionId của user
@@ -281,7 +281,9 @@ namespace Project.Api.Controllers
 
     public class LoginDto
     {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Vui lòng nhập tên đăng nhập, email hoặc số điện thoại.")]
         public string Keyword { get; set; } = null!; // Username, Email, or PhoneNumber
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Vui lòng nhập mật khẩu.")]
         public string Password { get; set; } = null!;
     }
 

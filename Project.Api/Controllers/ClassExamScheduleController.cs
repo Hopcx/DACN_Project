@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Project.Application.Common;
 using Project.Application.DTOs.ClassExamScheduleDTO;
@@ -10,6 +11,7 @@ using System.Data;
 namespace Project.Api.Controllers
 {
     [ApiController]
+    [Authorize(Policy = "ScheduleManagement")]
     [Route("web/class-exam-schedules")]
     [Microsoft.AspNetCore.Authorization.Authorize(Policy = "ScheduleManagement")]
     public class ClassExamScheduleController : ControllerBase
