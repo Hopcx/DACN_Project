@@ -35,6 +35,92 @@ public sealed class AdminAttemptReportController : ControllerBase
         return Ok(ApiResponse<object>.Ok(new { exams, subjects, classes }));
     }
 
+    // P2: phổ điểm theo bài thi / lớp / môn. Chỉ lượt DACN đã chốt, chưa hủy (cùng mẫu số với Get).
+    // Điểm quy về thang 10 theo Exam.MaximmumMark để so sánh giữa các bài có thang khác nhau.
+    // Nhóm "class": lịch được gán cho lớp VÀ học viên là thành viên đã duyệt của lớp đó.
+    [HttpGet("score-groups")]
+    public async Task<IActionResult> ScoreGroups([FromQuery] string groupBy = "exam",
+        [FromQuery] int? examId = null, [FromQuery] int? classId = null, [FromQuery] int? subjectId = null)
+    {
+        if (groupBy is not ("exam" or "class" or "subject") ||
+            examId is <= 0 || classId is <= 0 || subjectId is <= 0)
+            return BadRequest(ApiResponse<string>.Fail("INVALID_FILTER"));
+
+        IQueryable<ExamAttempt> finalized = _db.ExamAttempts.AsNoTracking().Where(x =>
+            (x.State == "submitted" || x.State == "timedOut") &&
+            x.Submission != null && x.Submission.VoidedAtUtc == null);
+        if (examId.HasValue) finalized = finalized.Where(x => x.ExamId == examId.Value);
+        if (subjectId.HasValue)
+            finalized = finalized.Where(x => _db.Exams.Any(e => e.Id == x.ExamId && e.SubjectId == subjectId.Value));
+        if (classId.HasValue)
+            finalized = finalized.Where(x => _db.ClassExamSchedules.Any(link =>
+                link.ExamScheduleId == x.ExamScheduleId && link.ClassId == classId.Value));
+
+        var rows = await (from attempt in finalized
+            join exam in _db.Exams.AsNoTracking() on attempt.ExamId equals exam.Id
+            select new {
+                attempt.Id, attempt.UserId, attempt.ExamScheduleId, exam.SubjectId, ExamId = exam.Id,
+                Max = exam.MaximmumMark, attempt.Submission!.TotalMark, attempt.Submission.IsPassed
+            }).ToListAsync();
+
+        List<(int Key, Guid AttemptId)> keyed;
+        Dictionary<int, string> names;
+        if (groupBy == "exam")
+        {
+            keyed = rows.Select(r => (r.ExamId, r.Id)).ToList();
+            var ids = keyed.Select(k => k.Key).Distinct().ToList();
+            names = await _db.Exams.AsNoTracking().Where(x => ids.Contains(x.Id)).ToDictionaryAsync(x => x.Id, x => x.Name);
+        }
+        else if (groupBy == "subject")
+        {
+            keyed = rows.Select(r => (r.SubjectId, r.Id)).ToList();
+            var ids = keyed.Select(k => k.Key).Distinct().ToList();
+            names = await _db.Subjects.AsNoTracking().Where(x => ids.Contains(x.Id)).ToDictionaryAsync(x => x.Id, x => x.Name);
+        }
+        else
+        {
+            var scheduleIds = rows.Select(r => r.ExamScheduleId).Distinct().ToList();
+            var userIds = rows.Select(r => r.UserId).Distinct().ToList();
+            var memberships = await (from link in _db.ClassExamSchedules.AsNoTracking()
+                where scheduleIds.Contains(link.ExamScheduleId) && (!classId.HasValue || link.ClassId == classId.Value)
+                join member in _db.ClassUsers.AsNoTracking() on link.ClassId equals member.ClassId
+                where member.Status == 1 && userIds.Contains(member.UserId)
+                select new { link.ExamScheduleId, link.ClassId, member.UserId }).Distinct().ToListAsync();
+            keyed = (from r in rows
+                join m in memberships on new { r.ExamScheduleId, r.UserId } equals new { m.ExamScheduleId, m.UserId }
+                select (m.ClassId, r.Id)).Distinct().ToList();
+            var ids = keyed.Select(k => k.Key).Distinct().ToList();
+            names = await _db.Classes.AsNoTracking().Where(x => ids.Contains(x.Id)).ToDictionaryAsync(x => x.Id, x => x.Name);
+        }
+
+        var byId = rows.ToDictionary(r => r.Id);
+        var groups = keyed.GroupBy(k => k.Key).Select(g =>
+        {
+            var items = g.Select(k => byId[k.AttemptId]).ToList();
+            var buckets = new int[10];
+            foreach (var item in items.Where(i => i.Max > 0))
+            {
+                var tenScale = (double)item.TotalMark * 10d / item.Max;
+                buckets[Math.Clamp((int)Math.Floor(tenScale), 0, 9)]++;
+            }
+            var passed = items.Count(i => i.IsPassed);
+            return new {
+                id = g.Key, name = names.GetValueOrDefault(g.Key) ?? $"#{g.Key}",
+                finalizedCount = items.Count, passedCount = passed, failedCount = items.Count - passed,
+                averageScore = decimal.Round(items.Average(i => i.TotalMark), 2, MidpointRounding.ToEven),
+                passPercent = decimal.Round(100m * passed / items.Count, 2, MidpointRounding.ToEven),
+                buckets = buckets.Select((count, index) => new {
+                    from = index, to = index + 1, label = $"{index}–{index + 1}", count }).ToList()
+            };
+        }).OrderBy(x => x.name).ToList();
+
+        return Ok(ApiResponse<object>.Ok(new {
+            scope = "dacnAttemptsOnly", groupBy, scale = 10,
+            classGroupMeaning = "scheduleAssignedToClassAndApprovedMember",
+            filters = new { examId, classId, subjectId }, groups
+        }));
+    }
+
     [HttpGet]
     public async Task<IActionResult> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 10,
         [FromQuery] int? examId = null, [FromQuery] int? classId = null, [FromQuery] int? subjectId = null,

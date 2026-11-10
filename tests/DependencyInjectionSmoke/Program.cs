@@ -120,8 +120,7 @@ if (!unauthenticatedResult.Challenged || !forbiddenResult.Forbidden)
 var protectedControllers = typeof(UserController).Assembly.GetTypes()
     .Where(t => t.IsSubclassOf(typeof(ControllerBase)) && t != typeof(AuthController) && t != typeof(RegistrationController));
 foreach (var controller in protectedControllers)
-    if (controller != typeof(WeatherForecastController) &&
-        controller.GetCustomAttributes(typeof(AuthorizeAttribute), true).Length == 0)
+    if (controller.GetCustomAttributes(typeof(AuthorizeAttribute), true).Length == 0)
         throw new Exception($"Controller lacks explicit policy: {controller.Name}");
 
 foreach (var method in new[] { "Create", "Update", "Delete" })
