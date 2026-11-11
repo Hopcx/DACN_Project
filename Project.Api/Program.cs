@@ -94,9 +94,10 @@ namespace Project.Api
                     options.AddPolicy("auth-public", context => RateLimitPartition.GetFixedWindowLimiter(
                         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                         _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
-                    options.AddPolicy("auth-session", context => RateLimitPartition.GetFixedWindowLimiter(
-                        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                        _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+                    // Refresh/logout: hạn mức theo phiên (refresh cookie) + trần theo IP. Xem SessionRateLimits.
+                    var sessionLimits = SessionRateLimits.Read(builder.Configuration);
+                    options.AddPolicy("auth-session", context => SessionRateLimits.SessionPolicy(context, sessionLimits));
+                    options.GlobalLimiter = SessionRateLimits.IpCeiling(sessionLimits);
                 });
 
                 // ===== CÁCH CŨ: Không có JWT Authentication (đã comment) =====
