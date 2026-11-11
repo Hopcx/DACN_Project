@@ -24,7 +24,7 @@ namespace Project.Api.Controllers
         private readonly ProjectDACNDbContext _dbContext;
         private readonly IConfiguration _configuration;
         private readonly IAntiforgery _antiforgery;
-        private const string RefreshCookie = "__Secure-dacn-refresh";
+        private const string RefreshCookie = SessionRateLimits.RefreshCookie;
 
         public AuthController(
             IUserRepository userRepository,

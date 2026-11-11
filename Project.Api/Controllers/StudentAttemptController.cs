@@ -40,6 +40,7 @@ public class StudentAttemptController : ControllerBase
         var voided = result?.VoidedAtUtc != null;
         return new {
             attemptId = row.Id, scheduleId = row.ExamScheduleId, state = voided ? "voided" : row.State,
+            examName = Snapshot(row).ExamName,
             serverNow = now, deadline = Utc(row.DeadlineUtc), revision = row.Revision,
             questions = finished ? Array.Empty<AttemptQuestionDto>() : AttemptSnapshotFactory.ForStudent(Snapshot(row)),
             savedAnswers = finished ? Array.Empty<AttemptAnswerDto>() : Draft(row),
@@ -84,6 +85,10 @@ public class StudentAttemptController : ControllerBase
             select new {
                 attempt.Id, attempt.ExamScheduleId, attempt.ExamId,
                 ExamName = exam.Name, ScheduleTitle = schedule.Title,
+                exam.NumberOfRepeat, ScheduleEndUtc = schedule.EndTime, ScheduleIsUtc = schedule.IsTimeUtc,
+                // Thứ tự lượt trong cùng lịch (1-based), cùng cách đếm NumberOfRepeat khi Start.
+                AttemptNumber = _db.ExamAttempts.Count(other => other.UserId == attempt.UserId &&
+                    other.ExamScheduleId == attempt.ExamScheduleId && other.StartedAtUtc <= attempt.StartedAtUtc),
                 attempt.StartedAtUtc, attempt.DeadlineUtc, attempt.FinishedAtUtc,
                 attempt.State, attempt.AllowViewResult,
                 SubmittedAtUtc = attempt.Submission == null ? (DateTime?)null : attempt.Submission.SubmittedAtUtc,
@@ -96,6 +101,10 @@ public class StudentAttemptController : ControllerBase
         var items = rows.Select(x => new {
             attemptId = x.Id, scheduleId = x.ExamScheduleId, examId = x.ExamId,
             examName = x.ExamName, scheduleTitle = x.ScheduleTitle,
+            attemptNumber = x.AttemptNumber, numberOfRepeat = x.NumberOfRepeat,
+            // Cùng điều kiện với GET review: đã chốt, chưa hủy, được xem kết quả, lịch UTC đã kết thúc.
+            reviewAvailable = !x.VoidedAtUtc.HasValue && x.AllowViewResult && x.TotalMark.HasValue &&
+                x.State != "inProgress" && x.ScheduleIsUtc && now >= Utc(x.ScheduleEndUtc),
             state = x.VoidedAtUtc.HasValue ? "voided" : x.State,
             pendingFinalization = x.State == "inProgress" && AttemptTiming.IsExpired(now, x.DeadlineUtc),
             startedAt = Utc(x.StartedAtUtc), deadline = Utc(x.DeadlineUtc),
