@@ -65,6 +65,7 @@ namespace Project.Api
                 builder.Services.AddApplication();
                 builder.Services.AddInfrastructure(builder.Configuration);
                 builder.Services.AddScoped<AttemptFinalizer>();
+                builder.Services.AddScoped<AuditWriter>();
                 builder.Services.AddScoped<Project.Application.Interfaces.Services.IExamVariantService, Project.Api.Services.ExamVariantStore>();
                 builder.Services.AddSingleton<IVerificationEmailSender, VerificationEmailSender>();
                 builder.Services.AddHostedService<ExpiredAccessTokenCleanupService>();

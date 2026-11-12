@@ -18,6 +18,19 @@ namespace Project.Domain.Entities
 
         public byte? Status { get; set; }
 
+        // P4 audit: các cột dưới đây nullable để hàng cũ giữ nguyên; chỉ server ghi, không nhận từ client.
+        public Guid? ActorUserId { get; set; }
+
+        public DateTime? CreatedAtUtc { get; set; }
+
+        public string? Action { get; set; }
+
+        public string? EntityType { get; set; }
+
+        public string? EntityId { get; set; }
+
+        public string? CorrelationId { get; set; }
+
         //public virtual ICollection<UserPermission> UserPermissions { get; set; } = new List<UserPermission>();
     }
 }
