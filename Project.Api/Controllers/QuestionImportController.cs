@@ -199,4 +199,41 @@ public static class QuestionWorkbook
         }
         return output.ToArray();
     }
+
+    // P4/F12: ghi workbook v1 cùng định dạng Template(). Mọi ô là inlineStr (kể cả số) nên không có <f>
+    // và chuỗi bắt đầu bằng = + - @ vẫn chỉ là text. XML dựng bằng XElement để tự escape.
+    public static byte[] Write(IEnumerable<string[]> dataRows)
+    {
+        var headers = new[] { "SubjectId", "QuestionLevelId", "QuestionTypeId", "Content", "Answers", "CorrectIndexes" };
+        XElement Cell(char column, int row, string value) =>
+            new(S + "c", new XAttribute("r", $"{column}{row}"), new XAttribute("t", "inlineStr"),
+                new XElement(S + "is", new XElement(S + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), value)));
+        var sheetData = new XElement(S + "sheetData",
+            new XElement(S + "row", new XAttribute("r", 1), headers.Select((value, i) => Cell((char)('A' + i), 1, value))));
+        var number = 2;
+        foreach (var values in dataRows)
+        {
+            if (values.Length != headers.Length)
+                throw new ArgumentException("Mỗi dòng dữ liệu cần đúng sáu giá trị", nameof(dataRows));
+            var rowNumber = number++;
+            sheetData.Add(new XElement(S + "row", new XAttribute("r", rowNumber),
+                values.Select((value, i) => Cell((char)('A' + i), rowNumber, value))));
+        }
+        var sheetXml = new XElement(S + "worksheet", sheetData).ToString(SaveOptions.DisableFormatting);
+        using var output = new MemoryStream();
+        using (var zip = new ZipArchive(output, ZipArchiveMode.Create, true))
+        {
+            void Entry(string name, string content)
+            {
+                using var writer = new StreamWriter(zip.CreateEntry(name).Open(), new UTF8Encoding(false));
+                writer.Write(content);
+            }
+            Entry("[Content_Types].xml", """<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>""");
+            Entry("_rels/.rels", """<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>""");
+            Entry("xl/workbook.xml", """<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Questions" sheetId="1" r:id="rId1"/></sheets></workbook>""");
+            Entry("xl/_rels/workbook.xml.rels", """<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>""");
+            Entry(Sheet, sheetXml);
+        }
+        return output.ToArray();
+    }
 }

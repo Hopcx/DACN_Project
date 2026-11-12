@@ -21,6 +21,8 @@ using Project.Infrastructure;
 AttemptSnapshotSmoke.Run();
 AttemptScoringSmoke.Run();
 QuestionWorkbookSmoke.Run();
+QuestionExportSmoke.Run();
+AccountWorkbookSmoke.Run();
 if (args.Contains("--attempt-snapshot")) return;
 
 var configuration = new ConfigurationBuilder()
@@ -40,6 +42,8 @@ services.AddApplication();
 services.AddInfrastructure(configuration);
 services.AddScoped<IExamVariantService, ExamVariantStore>();
 services.AddScoped<AttemptFinalizer>();
+services.AddScoped<AuditWriter>();
+services.AddHttpContextAccessor();
 
 using var provider = services.BuildServiceProvider(validateScopes: true);
 using var firstScope = provider.CreateScope();
@@ -66,7 +70,9 @@ var controllerTypes = new[]
     typeof(RoomController), typeof(SubmissionController),
     typeof(ExamScheduleController), typeof(StudentScheduleController)
     , typeof(QuestionController), typeof(QuestionImportController), typeof(TeacherClassController),
-    typeof(StudentAttemptController), typeof(AnswerController), typeof(ExamController)
+    typeof(StudentAttemptController), typeof(AnswerController), typeof(ExamController),
+    typeof(QuestionExportController), typeof(AccountExcelController), typeof(AdminAuditController),
+    typeof(TeacherOverviewController)
 };
 
 foreach (var controllerType in controllerTypes)
@@ -96,7 +102,7 @@ if ((await authorization.AuthorizeAsync(anonymous, null, "AdminManagement")).Suc
     (await authorization.AuthorizeAsync(student, null, "AdminManagement")).Succeeded ||
     !(await authorization.AuthorizeAsync(admin, null, "AdminManagement")).Succeeded ||
     (await authorization.AuthorizeAsync(student, null, "ExamManagement")).Succeeded ||
-    (await authorization.AuthorizeAsync(admin, null, "Teacher")).Succeeded ||
+    !(await authorization.AuthorizeAsync(admin, null, "Teacher")).Succeeded ||
     (await authorization.AuthorizeAsync(student, null, "Teacher")).Succeeded ||
     !(await authorization.AuthorizeAsync(teacher, null, "Teacher")).Succeeded ||
     !(await authorization.AuthorizeAsync(examiner, null, "ExamManagement")).Succeeded)
