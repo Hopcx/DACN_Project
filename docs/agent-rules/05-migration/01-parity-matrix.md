@@ -1,5 +1,16 @@
 # Ma trận chức năng Testify → DACN
 
+## Delta P4 — 11/11/2026
+
+| Feature | Trạng thái | Bằng chứng và giới hạn |
+| --- | --- | --- |
+| F12 Export câu hỏi | IN_PROGRESS | `GET /web/questions/export` xuất workbook v1 import lại được (`QuestionWorkbook.Write`). Đã thực chạy: build 0 error, smoke console ghi/đọc lại nguyên văn. `tests/TaskP4QuestionExportApiSmoke.ps1` PASS trên bản sao `ProjectDACN_Task04Task09_Test` (API trỏ bản sao); DI smoke PASS (22 controller). Khác Testify: kiểm từng câu, câu không import lại được thì 409 kèm danh sách thay vì xuất nguyên trạng; tối đa 500 câu. |
+| F13 Tài khoản Excel | IN_PROGRESS | `/web/users/excel/{template,import,export}`. Đã thực chạy: build 0 error, smoke console cho `AccountWorkbook`. `tests/TaskP4AccountExcelApiSmoke.ps1` PASS trên bản sao `ProjectDACN_Task04Task09_Test`; DI smoke PASS. Mail thật chưa thử. Khác Testify: băm BCrypt thay vì MD5, trùng thì từ chối cả file (không nhập dở dang), mail xác minh thay vì tài khoản dùng ngay, tiêu đề tiếng Anh `yyyy-MM-dd`, một `levelId` ∈ {3,4} cho cả file. |
+| F23 Nhật ký | IN_PROGRESS | Migration `P4AuditLogColumns` (đã áp chỉ trên bản sao `ProjectDACN_Task04Task09_Test`, DB gốc chưa áp), `AuditWriter`, `/web/admin/audit/{logs,exam-activity}`, khóa 405 sáu route ghi `/web/logs` và `/web/exam-activity-logs`. `tests/TaskP4AuditApiSmoke.ps1` PASS trên bản sao. `ExamActivityLogs` chưa có writer phía server; chưa có job xóa log sau 12 tháng (O10). |
+| F05b Tổng quan giảng viên | IN_PROGRESS | `GET /web/teacher/overview` (owner scope, Admin mọi lớp, đếm lượt theo `ExamAttempts.Id` khác nhau). `tests/TaskP4TeacherOverviewApiSmoke.ps1` PASS trên bản sao; chưa có giao diện (chưa VERIFIED). |
+
+Script nghiệm thu: `tests/TaskP4AccountExcelApiSmoke.ps1`, `TaskP4QuestionExportApiSmoke.ps1`, `TaskP4AuditApiSmoke.ps1`, `TaskP4TeacherOverviewApiSmoke.ps1`. Cả 4 đã chạy PASS (xem `.bangiao/ket-qua-test.md`) với API trỏ bản sao `ProjectDACN_Task04Task09_Test`; áp migration `P4AuditLogColumns` (kèm `20261109144046_0911_new` còn thiếu) chỉ trên bản sao, DB gốc chưa áp. Contract: [06-as-is-additions](../04-contracts/06-as-is-additions.md) A05–A08.
+
 ## Delta As-is A01–A06 — 22/10/2026
 
 | Feature | Trạng thái | Bằng chứng và giới hạn |
