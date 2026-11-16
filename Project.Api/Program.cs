@@ -70,6 +70,9 @@ namespace Project.Api
                 builder.Services.AddSingleton<IVerificationEmailSender, VerificationEmailSender>();
                 builder.Services.AddHostedService<ExpiredAccessTokenCleanupService>();
                 builder.Services.AddHostedService<ExpiredAttemptFinalizerService>();
+                // Health: live = tiến trình chạy; ready = kết nối được SQL Server (G7)
+                builder.Services.AddHealthChecks()
+                    .AddCheck<Project.Api.HealthChecks.DatabaseHealthCheck>("db", tags: new[] { "ready" });
                 builder.Services.AddScoped<AuthCsrfFilter>();
                 builder.Services.AddAntiforgery(options =>
                 {
@@ -230,6 +233,11 @@ namespace Project.Api
                 app.UseAuthorization();
 
                 app.MapControllers();
+                // FallbackPolicy yêu cầu đăng nhập nên hai endpoint health phải AllowAnonymous; response chỉ có Healthy/Unhealthy
+                app.MapHealthChecks("/web/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+                { Predicate = _ => false }).AllowAnonymous();
+                app.MapHealthChecks("/web/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+                { Predicate = check => check.Tags.Contains("ready") }).AllowAnonymous();
 
                 Log.Information("Ứng dụng đã khởi động thành công");
                 app.Run();

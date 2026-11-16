@@ -18,3 +18,7 @@ Mỗi feature làm contract → schema/use case → API → FE → acceptance. G
 Bug legacy phải ghi hành vi cũ → quyết định mới → fixture. Không giữ lỗi scoring để gọi là “giống hệt”; không thay semantics thiếu quyết định.
 
 Nếu migrate dữ liệu cũ: backup, dry-run mapping ID/status/hash/timezone, đối soát, cutover và rollback phù hợp. Không dùng credential trong source để thử kết nối server thật. Nếu database mới, tạo fixture synthetic để test, không điền số dashboard giả thành số liệu production.
+
+## Giai đoạn 7 — trạng thái 16/11/2026
+
+Đã có: health live/ready; `tests/CutoverRehearsal.ps1` (backup → restore bản sao → migration từ bản cuối → health → rollback; PASS với nguồn `ProjectDACN` 12/12 và nguồn cũ 1 → 12); `tests/RunUatSuite.ps1` (bộ UAT tự động); [runbook](../06-quality/03-cutover-runbook.md); [checklist UAT](../06-quality/04-uat-checklist.md). Chưa làm: chốt nơi chạy và cấu hình máy chủ, UAT với người dùng thật, cutover thật. Không ETL Testify (nguồn 0 lượt thi).
