@@ -26,4 +26,6 @@ Worker finalize attempt quá hạn dùng DB làm trạng thái bền; restart ph
 
 Theo dõi lỗi start/save/submit, độ trễ query, số attempt quá hạn chưa finalize, refresh failures, deadlocks và saturation connection. Log correlation ID, không ghi raw answers/credentials vào log kỹ thuật. Backup định kỳ và thử restore với chính sách được chọn.
 
+Cụ thể hiện tại (G7, 16/11/2026): health `GET /web/health/live` và `GET /web/health/ready` (kiểm SQL, không cần đăng nhập, chỉ trả `Healthy`/`Unhealthy`); log Serilog ở `logs/log-<ngày>.txt` dưới thư mục API; truy vấn lượt quá hạn chưa chốt và trình tự cutover/rollback ở [03-cutover-runbook.md](03-cutover-runbook.md); checklist nghiệm thu ở [04-uat-checklist.md](04-uat-checklist.md).
+
 Chưa có số liệu concurrent users hoặc SLA. Không khẳng định một cấu hình server đủ tải khi chưa load-test bằng môi trường gần thực tế.
