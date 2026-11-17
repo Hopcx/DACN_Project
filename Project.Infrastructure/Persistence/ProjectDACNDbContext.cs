@@ -61,6 +61,9 @@ namespace Project.Infrastructure.Persistence
         public virtual DbSet<QuestionAnswer> QuestionAnswers { get; set; }
 
         public virtual DbSet<QuestionLevel> QuestionLevels { get; set; }
+        public DbSet<Chapter> Chapters { get; set; }
+        public DbSet<Tag> Tags { get; set; }
+        public DbSet<QuestionTag> QuestionTags { get; set; }
 
         public virtual DbSet<QuestionType> QuestionTypes { get; set; }
 
@@ -98,6 +101,7 @@ namespace Project.Infrastructure.Persistence
 
             // Seed system data
             QuestionTypeSeed.Seed(modelBuilder);
+            QuestionLevelSeed.Seed(modelBuilder);
             LevelSeed.Seed(modelBuilder);
             PermissionSeed.Seed(modelBuilder);
             SubjectSeed.Seed(modelBuilder);

@@ -26,6 +26,9 @@ namespace Project.Domain.Entities
         public int QuestionTypeId { get; set; }
 
         public int? QuestionLevelId { get; set; }
+        // To-be 3.1: chương (cùng môn với câu) và lời giải; câu cũ để NULL
+        public int? ChapterId { get; set; }
+        public string? Explanation { get; set; }
 
         public Guid? CreatedBy { get; set; }
 
@@ -49,5 +52,7 @@ namespace Project.Domain.Entities
         public virtual QuestionLevel? QuestionLevel { get; set; }
 
         public virtual QuestionType QuestionType { get; set; } = null!;
+        public virtual Chapter? Chapter { get; set; }
+        public virtual ICollection<QuestionTag> QuestionTags { get; set; } = new List<QuestionTag>();
     }
 }
