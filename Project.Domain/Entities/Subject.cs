@@ -31,5 +31,6 @@ namespace Project.Domain.Entities
         public virtual ICollection<ExamSchedule> ExamSchedules { get; set; } = new List<ExamSchedule>();
 
         public virtual ICollection<Exam> Exams { get; set; } = new List<Exam>();
+        public virtual ICollection<Chapter> Chapters { get; set; } = new List<Chapter>();
     }
 }

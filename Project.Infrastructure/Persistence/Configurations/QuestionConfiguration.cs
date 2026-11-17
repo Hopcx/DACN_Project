@@ -24,6 +24,14 @@ namespace Project.Infrastructure.Persistence.Configurations
             entity.HasOne(d => d.QuestionType)
                   .WithMany(p => p.Questions)
                   .HasForeignKey(d => d.QuestionTypeId);
+
+            // To-be T1: chương (nullable) và lời giải
+            entity.Property(e => e.Explanation).HasMaxLength(4000);
+            entity.HasIndex(e => e.ChapterId);
+            entity.HasOne(d => d.Chapter)
+                  .WithMany(p => p.Questions)
+                  .HasForeignKey(d => d.ChapterId)
+                  .OnDelete(DeleteBehavior.Restrict);
         }
     }
 

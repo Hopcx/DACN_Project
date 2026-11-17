@@ -140,6 +140,49 @@ namespace Project.Infrastructure.Migrations
                     b.ToTable("BlackListTokens");
                 });
 
+            modelBuilder.Entity("Project.Domain.Entities.Chapter", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<byte>("Status")
+                        .HasColumnType("tinyint");
+
+                    b.Property<int>("SubjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubjectId", "Name")
+                        .IsUnique()
+                        .HasFilter("[Status] <> 255");
+
+                    b.ToTable("Chapters");
+                });
+
             modelBuilder.Entity("Project.Domain.Entities.Class", b =>
                 {
                     b.Property<int>("Id")
@@ -965,6 +1008,9 @@ namespace Project.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("ChapterId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Content")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -980,6 +1026,10 @@ namespace Project.Infrastructure.Migrations
 
                     b.Property<string>("DocumentPath")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Explanation")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<int?>("QuestionLevelId")
                         .HasColumnType("int");
@@ -1000,6 +1050,8 @@ namespace Project.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ChapterId");
 
                     b.HasIndex("QuestionLevelId");
 
@@ -1052,6 +1104,44 @@ namespace Project.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("QuestionLevels");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Description = "Câu hỏi mức độ dễ",
+                            Name = "Dễ",
+                            Status = true
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Description = "Câu hỏi mức độ trung bình",
+                            Name = "Trung bình",
+                            Status = true
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Description = "Câu hỏi mức độ khó",
+                            Name = "Khó",
+                            Status = true
+                        });
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.QuestionTag", b =>
+                {
+                    b.Property<int>("QuestionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TagId")
+                        .HasColumnType("int");
+
+                    b.HasKey("QuestionId", "TagId");
+
+                    b.HasIndex("TagId");
+
+                    b.ToTable("QuestionTags");
                 });
 
             modelBuilder.Entity("Project.Domain.Entities.QuestionType", b =>
@@ -1290,6 +1380,47 @@ namespace Project.Infrastructure.Migrations
                     b.ToTable("Submissions");
                 });
 
+            modelBuilder.Entity("Project.Domain.Entities.Tag", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<byte>("Status")
+                        .HasColumnType("tinyint");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("Tags");
+                });
+
             modelBuilder.Entity("Project.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1445,6 +1576,17 @@ namespace Project.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Attempt");
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.Chapter", b =>
+                {
+                    b.HasOne("Project.Domain.Entities.Subject", "Subject")
+                        .WithMany("Chapters")
+                        .HasForeignKey("SubjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Subject");
                 });
 
             modelBuilder.Entity("Project.Domain.Entities.Class", b =>
@@ -1684,6 +1826,11 @@ namespace Project.Infrastructure.Migrations
 
             modelBuilder.Entity("Project.Domain.Entities.Question", b =>
                 {
+                    b.HasOne("Project.Domain.Entities.Chapter", "Chapter")
+                        .WithMany("Questions")
+                        .HasForeignKey("ChapterId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Project.Domain.Entities.QuestionLevel", "QuestionLevel")
                         .WithMany("Questions")
                         .HasForeignKey("QuestionLevelId");
@@ -1693,6 +1840,8 @@ namespace Project.Infrastructure.Migrations
                         .HasForeignKey("QuestionTypeId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Chapter");
 
                     b.Navigation("QuestionLevel");
 
@@ -1716,6 +1865,25 @@ namespace Project.Infrastructure.Migrations
                     b.Navigation("Answer");
 
                     b.Navigation("Question");
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.QuestionTag", b =>
+                {
+                    b.HasOne("Project.Domain.Entities.Question", "Question")
+                        .WithMany("QuestionTags")
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Project.Domain.Entities.Tag", "Tag")
+                        .WithMany("QuestionTags")
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Question");
+
+                    b.Navigation("Tag");
                 });
 
             modelBuilder.Entity("Project.Domain.Entities.Submission", b =>
@@ -1780,6 +1948,11 @@ namespace Project.Infrastructure.Migrations
                     b.Navigation("QuestionAnswers");
                 });
 
+            modelBuilder.Entity("Project.Domain.Entities.Chapter", b =>
+                {
+                    b.Navigation("Questions");
+                });
+
             modelBuilder.Entity("Project.Domain.Entities.Class", b =>
                 {
                     b.Navigation("ClassExamSchedules");
@@ -1831,6 +2004,8 @@ namespace Project.Infrastructure.Migrations
                     b.Navigation("ExamDetailQuestions");
 
                     b.Navigation("QuestionAnswers");
+
+                    b.Navigation("QuestionTags");
                 });
 
             modelBuilder.Entity("Project.Domain.Entities.QuestionLevel", b =>
@@ -1855,6 +2030,8 @@ namespace Project.Infrastructure.Migrations
 
             modelBuilder.Entity("Project.Domain.Entities.Subject", b =>
                 {
+                    b.Navigation("Chapters");
+
                     b.Navigation("Classes");
 
                     b.Navigation("ExamSchedules");
@@ -1865,6 +2042,11 @@ namespace Project.Infrastructure.Migrations
             modelBuilder.Entity("Project.Domain.Entities.Submission", b =>
                 {
                     b.Navigation("AnswerSubmissions");
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.Tag", b =>
+                {
+                    b.Navigation("QuestionTags");
                 });
 
             modelBuilder.Entity("Project.Domain.Entities.User", b =>

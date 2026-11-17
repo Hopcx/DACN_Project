@@ -55,6 +55,7 @@ API **từ chối khởi động** nếu thiếu (FACT: `Project.Api/Program.cs`
 
 - **Trước khi mở lại sử dụng**: dừng API → chạy **một batch** trên `master` để cắt mọi kết nối còn lại rồi restore ngay: `ALTER DATABASE [ProjectDACN] SET OFFLINE WITH ROLLBACK IMMEDIATE; RESTORE DATABASE [ProjectDACN] FROM DISK = N'…cutover….bak' WITH REPLACE, RECOVERY;` (tách thành nhiều lệnh thì kết nối khác có thể chen vào làm RESTORE lỗi) → khởi động bản API cũ. Diễn tập 16/11 xác nhận restore đưa history về đúng trạng thái trước (12 → 12 với nguồn hiện tại; 12 → 1 với nguồn cũ).
 - **Sau khi đã có dữ liệu mới**: restore làm mất dữ liệu phát sinh; chỉ làm khi lỗi chặn và đã thông báo. `Down` của migration **không** khôi phục dữ liệu bị ghi đè (`12-data-readiness.md`).
+- **Riêng migration `20261117021231_ToBeT1QuestionMetadata`** (To-be T1): `Down` xóa 3 dòng seed `QuestionLevels` Id 1–3; khi đã có câu hỏi dùng mức độ 1–3, `Down` **lỗi** FK `FK_Questions_QuestionLevels_QuestionLevelId`. Vì vậy rollback T1 bằng `Down` chỉ dùng khi chưa có câu hỏi gắn mức độ; sau đó chỉ rollback bằng restore backup.
 
 ## 6. Quan sát sau cutover
 
@@ -74,3 +75,4 @@ Lưu ý khi chốt: API bật `UseHttpsRedirection`, nên probe health gọi b�
 
 - File `.bak` diễn tập nằm trong thư mục backup mặc định của SQL Server (`SERVERPROPERTY('InstanceDefaultBackupPath')`); tài khoản Windows thường **không xóa được** — cần quyền admin để dọn.
 - `CutoverRehearsal.ps1` dùng `dotnet ef … --no-build` vì API đang chạy giữ khóa DLL; luôn build solution trước.
+- **Seed mức độ của To-be T1** dùng `HasData` với Id cố định 1 "Dễ", 2 "Trung bình", 3 "Khó" (`Project.Infrastructure/Persistence/Seed/QuestionLevelSeed.cs`), không kiểm tồn tại. Nếu DB đích **đã có** dòng `QuestionLevels` Id 1–3, migration lỗi khóa chính và rollback cả khối. Trước cutover chạy: `SELECT Id, Name FROM dbo.QuestionLevels WHERE Id IN (1,2,3);` — nếu có dòng: dừng, không tự xóa; quyết định cùng người dùng (đổi tên dòng có sẵn cho khớp 3 mức rồi đánh dấu migration đã áp, hoặc chuyển câu hỏi sang Id khác). Tại 16–17/11/2026 `ProjectDACN` và bản sao QA đều 0 dòng.
