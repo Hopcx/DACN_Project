@@ -57,6 +57,12 @@ namespace Project.Api.Middlewares
                     _logger.LogWarning(ex, "Yêu cầu không hợp lệ");
                     break;
 
+                case ConflictException ex:
+                    response.StatusCode = (int)HttpStatusCode.Conflict;
+                    responseModel = ApiResponse<string>.Fail(ex.Message);
+                    _logger.LogWarning(ex, "Xung đột dữ liệu");
+                    break;
+
                 case NotFoundException ex:
                     response.StatusCode = (int)HttpStatusCode.NotFound;
                     responseModel = ApiResponse<string>.Fail(ex.Message);

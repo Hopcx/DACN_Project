@@ -25,6 +25,7 @@ $suite = @(
     @{ Name = 'TaskP4AuditApiSmoke';           Browser = $false; Marker = 'P4_AUDIT_SMOKE' },
     @{ Name = 'TaskP4QuestionExportApiSmoke';  Browser = $false; Marker = 'P4_QUESTION_EXPORT_SMOKE' },
     @{ Name = 'TaskP4TeacherOverviewApiSmoke'; Browser = $false; Marker = 'P4_TEACHER_OVERVIEW_SMOKE' },
+    @{ Name = 'TaskToBeT2QuestionMetadataApiSmoke'; Browser = $false; Marker = 'TOBE_T2_QUESTION_METADATA_SMOKE' },
     @{ Name = 'TaskP1RoleRegressionSmoke';     Browser = $true;  Marker = 'P1_ROLE_REGRESSION_SMOKE' },
     @{ Name = 'TaskP4FrontendSmoke';           Browser = $true;  Marker = 'P4_FRONTEND_SMOKE' },
     @{ Name = 'TaskSessionRateLimitApiSmoke';  Browser = $false; Marker = 'SESSION_RATE_LIMIT_SMOKE' }

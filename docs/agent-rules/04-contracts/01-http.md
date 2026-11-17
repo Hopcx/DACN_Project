@@ -95,3 +95,17 @@ Các route mới giữ `/web` và `ApiResponse`. `GET/PUT /web/profile` yêu c�
 `GET/PUT /web/users/{id:guid}` yêu cầu `AdminManagement` (claim `level_id=1`). GET trả `UserResponseDto`; PUT chỉ nhận `fullName`, `userName`, `email`, `phoneNumber`, `address`, `avatarUrl`. `levelId`, `status`, `passwordHash`, `lastLogin` không được cập nhật qua route này. Duplicate được kiểm trước và trả 409; unique index DB vẫn là chốt cuối khi có race. Public registration và cookie refresh chưa được thêm.
 
 **Cập nhật Task 04 tiếp theo:** đoạn mô tả JSON refresh ở trên chỉ là trạng thái trước thay đổi. Contract hiện hành của branch được ghi trong [05-auth-lifecycle.md](05-auth-lifecycle.md): refresh bằng cookie HttpOnly, access JSON, CSRF và email verification. Migration `20261003130000_Task04AuthLifecycle` chưa apply trên DB thực.
+
+## To-be T2 — chương, tag, metadata câu hỏi tại `dev/Hop`
+
+Không thêm migration (schema từ T1 `20261117021231_ToBeT1QuestionMetadata`). Mọi route giữ `/web` và `ApiResponse`.
+
+**Chương** `web/chapters`: `GET ?subjectId=&includeHidden=` cần quyền câu hỏi (2) hoặc môn học (3); `POST`, `PUT /{id}`, `DELETE /{id}` cần quyền môn học (3). Body `{subjectId, name, sortOrder, status?}`; tên trim, gộp khoảng trắng, 1–200 ký tự; `sortOrder >= 0`; `status` 0/1; môn phải đang hoạt động. Trùng tên trong cùng môn → 409. Đổi môn của chương đã có câu hỏi → 409. `DELETE` là ẩn (Status 255): câu đang gắn giữ liên kết, không gắn mới được. Response `{id, subjectId, name, sortOrder, status, questionCount}`.
+
+**Tag** `web/tags`: `GET ?textSearch=&includeHidden=` và `POST` cần quyền câu hỏi (2); `PUT /{id}` (đổi tên, status 0/1; áp dụng cả tag đã ẩn, gửi status 1 để hiện lại) và `DELETE /{id}` (ẩn) chỉ Admin. Tên 1–50 ký tự; trùng khi tên chuẩn hóa (trim, gộp khoảng trắng, chữ thường, bỏ dấu, đ→d; giữ gạch nối) trùng tag có sẵn kể cả tag đã ẩn → 409 kèm "id X". Không có gộp tag. Response `{id, name, status, questionCount}`.
+
+**Câu hỏi**: `POST/PUT /web/questions` nhận thêm `chapterId?`, `explanation?` (≤ 4000, trim, rỗng → null), `tagIds?` (ID dương, tối đa 10 sau khi bỏ trùng). Chương phải tồn tại và cùng môn; tag gắn mới phải đang hoạt động (Status 1), tag đã gắn sẵn với câu đang sửa được giữ dù đã ẩn/tắt; chương phải chưa bị ẩn (Status ≠ 255); sai → 400. **PUT là thay toàn bộ**: không gửi `chapterId`/`explanation`/`tagIds` nghĩa là xóa; FE (T3) phải luôn gửi đủ. Response thêm `chapterId`, `explanation`, `tagIds` (tăng dần). `GET /web/questions` nhận thêm `chapterId` và `tagIds` lặp (`tagIds=1&tagIds=2`, khớp bất kỳ tag nào), kết hợp AND với các bộ lọc cũ; ID ≤ 0 → 400.
+
+**Mức độ hệ thống**: `PUT/DELETE /web/question-levels/{1|2|3}` → 409.
+
+**Audit** (best-effort, ghi sau khi thao tác thành công bằng SaveChanges riêng; lỗi chỉ log): `question.create/update/hide/restore`, `chapter.create/update/hide`, `tag.create/update/hide`. Mô tả chỉ có ID, môn, chương, số tag, trạng thái; không chứa nội dung câu hỏi hay lời giải.
