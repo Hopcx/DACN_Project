@@ -11,6 +11,9 @@ namespace Project.Application.DTOs.QuestionDTO
         public int QuestionTypeId { get; set; }
         public int? QuestionLevelId { get; set; }
         public bool IsUsedInExam { get; set; }
+        public int? ChapterId { get; set; }
+        public string? Explanation { get; set; }
+        public List<int> TagIds { get; set; } = new();
         public List<QuestionAnswerResponseDto> Answers { get; set; } = new();
     }
 

@@ -49,6 +49,9 @@ namespace Project.Api.Extensions
                 // 3: Quản lý môn học
                 options.AddPolicy("SubjectManagement", policy =>
                     policy.RequireAssertion(c => IsAdmin(c) || HasPermission(c, "3")));
+                // To-be T2: xem chương — quyền câu hỏi (2) HOẶC môn học (3)
+                options.AddPolicy("QuestionOrSubjectManagement", policy =>
+                    policy.RequireAssertion(c => IsAdmin(c) || HasPermission(c, "2") || HasPermission(c, "3")));
                 // 4: Quản lý lịch thi
                 options.AddPolicy("ScheduleManagement", policy =>
                     policy.RequireAssertion(c => IsAdmin(c) || HasPermission(c, "4")));
