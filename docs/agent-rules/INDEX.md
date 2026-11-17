@@ -32,6 +32,8 @@
 - [05-migration/06-snapshot-integrity.md](05-migration/06-snapshot-integrity.md)
 - [06-quality/01-acceptance.md](06-quality/01-acceptance.md)
 - [06-quality/02-delivery-operations.md](06-quality/02-delivery-operations.md)
+- [06-quality/03-cutover-runbook.md](06-quality/03-cutover-runbook.md)
+- [06-quality/04-uat-checklist.md](06-quality/04-uat-checklist.md)
 - [07-agent-workflows/01-migrate-feature.md](07-agent-workflows/01-migrate-feature.md)
 - [07-agent-workflows/02-backend-feature.md](07-agent-workflows/02-backend-feature.md)
 - [07-agent-workflows/03-frontend-feature.md](07-agent-workflows/03-frontend-feature.md)

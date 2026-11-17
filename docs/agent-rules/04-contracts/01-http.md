@@ -1,5 +1,9 @@
 # HTTP contract: hiện tại và quy tắc phát triển
 
+## G7 health — 2026-11-16
+
+`GET /web/health/live` (tiến trình chạy; 200 khi API sống) và `GET /web/health/ready` (200 khi kết nối được SQL Server, 503 khi không) — không cần đăng nhập, body chỉ `Healthy`/`Unhealthy`, không trả chi tiết lỗi hay chuỗi kết nối.
+
 ## Task10 lịch học viên — 2026-10-18
 
 `GET /web/student/schedules` thêm `latestAttemptId` (Guid hoặc null) và `latestAttemptState` (`inProgress`, `submitted`, `timedOut` hoặc null) cho lượt mới gần nhất của chính học viên trong lịch. Nếu deadline lượt đang mở đã qua, state hiển thị là `timedOut`; GET attempt/submit sẽ ghi kết quả timeout vào SQL. FE dùng ID này để tiếp tục hoặc xem trạng thái sau thi; thao tác start vẫn do API kiểm quyền, giờ và giới hạn lượt.
