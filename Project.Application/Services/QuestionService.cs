@@ -11,11 +11,13 @@ public class QuestionService : IQuestionService
     private readonly IQuestionRepository _repository;
     public QuestionService(IQuestionRepository repository) => _repository = repository;
 
-    public async Task<List<QuestionResponseDto>> GetAllAsync(string? textSearch, int? subjectId, int? questionTypeId, int? questionLevelId)
+    public async Task<List<QuestionResponseDto>> GetAllAsync(string? textSearch, int? subjectId, int? questionTypeId, int? questionLevelId,
+        int? chapterId = null, IReadOnlyCollection<int>? tagIds = null)
     {
-        if (new[] { subjectId, questionTypeId, questionLevelId }.Any(x => x.HasValue && x.Value <= 0))
+        if (new[] { subjectId, questionTypeId, questionLevelId, chapterId }.Any(x => x.HasValue && x.Value <= 0) ||
+            (tagIds?.Any(x => x <= 0) ?? false))
             throw new BadRequestException("Bộ lọc phải là ID dương.");
-        var items = await _repository.GetAllQuestionsAsync(textSearch, subjectId, questionTypeId, questionLevelId);
+        var items = await _repository.GetAllQuestionsAsync(textSearch, subjectId, questionTypeId, questionLevelId, chapterId, tagIds);
         return items.Select(Map).ToList();
     }
 
@@ -27,19 +29,15 @@ public class QuestionService : IQuestionService
 
     public async Task<QuestionResponseDto?> CreateAsync(QuestionCreateDto dto)
     {
-        Validate(dto);
-        if (!await _repository.ReferencesExistAsync(dto.SubjectId, dto.QuestionTypeId, dto.QuestionLevelId))
-            throw new BadRequestException("Môn, loại hoặc mức độ không tồn tại hoặc đã ngừng sử dụng.");
-        var created = await _repository.SaveWithAnswersAsync(null, Entity(dto), BuildAnswers(dto));
+        await ValidateAllAsync(dto, null);
+        var created = await _repository.SaveWithAnswersAsync(null, Entity(dto), BuildAnswers(dto), TagIdsOf(dto));
         return created == null ? null : Map(created);
     }
 
     public async Task<QuestionResponseDto?> UpdateAsync(int id, QuestionCreateDto dto)
     {
-        Validate(dto);
-        if (!await _repository.ReferencesExistAsync(dto.SubjectId, dto.QuestionTypeId, dto.QuestionLevelId))
-            throw new BadRequestException("Môn, loại hoặc mức độ không tồn tại hoặc đã ngừng sử dụng.");
-        var updated = await _repository.SaveWithAnswersAsync(id, Entity(dto), BuildAnswers(dto));
+        await ValidateAllAsync(dto, id);
+        var updated = await _repository.SaveWithAnswersAsync(id, Entity(dto), BuildAnswers(dto), TagIdsOf(dto));
         return updated == null ? null : Map(updated);
     }
 
@@ -48,8 +46,27 @@ public class QuestionService : IQuestionService
     public async Task<List<QuestionSubjectDto>> GetSubjectsAsync() =>
         (await _repository.GetAvailableSubjectsAsync()).Select(x => new QuestionSubjectDto { Id = x.Id, Name = x.Name }).ToList();
 
+    public const int MaxTagsPerQuestion = 10;
+
+    private async Task ValidateAllAsync(QuestionCreateDto dto, int? questionId)
+    {
+        Validate(dto);
+        if (!await _repository.ReferencesExistAsync(dto.SubjectId, dto.QuestionTypeId, dto.QuestionLevelId))
+            throw new BadRequestException("Môn, loại hoặc mức độ không tồn tại hoặc đã ngừng sử dụng.");
+        var problem = await _repository.MetadataProblemAsync(dto.SubjectId, dto.ChapterId, TagIdsOf(dto), questionId);
+        if (problem != null) throw new BadRequestException(problem);
+    }
+
+    private static List<int> TagIdsOf(QuestionCreateDto dto) => (dto.TagIds ?? new List<int>()).Distinct().ToList();
+
     public static void Validate(QuestionCreateDto dto)
     {
+        // To-be T2: chương, tag, lời giải
+        if (dto.ChapterId is <= 0) throw new BadRequestException("Chương phải là ID dương.");
+        if (dto.TagIds != null && (dto.TagIds.Any(x => x <= 0) || dto.TagIds.Distinct().Count() > MaxTagsPerQuestion))
+            throw new BadRequestException($"Tag phải là ID dương, tối đa {MaxTagsPerQuestion} tag mỗi câu.");
+        if (dto.Explanation != null && dto.Explanation.Trim().Length > 4000)
+            throw new BadRequestException("Lời giải tối đa 4000 ký tự.");
         if (string.IsNullOrWhiteSpace(dto.Content) || dto.Content.Trim().Length > 4000)
             throw new BadRequestException("Nội dung câu hỏi phải có từ 1 đến 4000 ký tự.");
         if (dto.SubjectId <= 0 || dto.QuestionLevelId is <= 0 || dto.QuestionTypeId is < 1 or > 3)
@@ -77,7 +94,8 @@ public class QuestionService : IQuestionService
         Content = dto.Content.Trim(), Status = dto.Status ?? 1, SubjectId = dto.SubjectId,
         CreatedDate = DateTime.Now, CreatedAt = DateTime.Now,
         QuestionTypeId = dto.QuestionTypeId, QuestionLevelId = dto.QuestionLevelId,
-        DocumentPath = dto.DocumentPath
+        DocumentPath = dto.DocumentPath, ChapterId = dto.ChapterId,
+        Explanation = string.IsNullOrWhiteSpace(dto.Explanation) ? null : dto.Explanation.Trim()
     };
 
     private static List<Answer> BuildAnswers(QuestionCreateDto dto) => dto.Answers.Select(x => new Answer
@@ -90,7 +108,8 @@ public class QuestionService : IQuestionService
         Id = item.Id, Content = item.Content, CreatedDate = item.CreatedAt ?? item.CreatedDate,
         Status = item.Status, SubjectId = item.SubjectId, DocumentPath = item.DocumentPath,
         QuestionTypeId = item.QuestionTypeId, QuestionLevelId = item.QuestionLevelId,
-        IsUsedInExam = item.IsUsedInExam,
+        IsUsedInExam = item.IsUsedInExam, ChapterId = item.ChapterId, Explanation = item.Explanation,
+        TagIds = item.QuestionTags.Select(x => x.TagId).OrderBy(x => x).ToList(),
         Answers = item.Answers.Where(x => x.Status != 255).OrderBy(x => x.Id).Select(x => new QuestionAnswerResponseDto
         { Id = x.Id, Content = x.Content, IsCorrect = x.IsCorrect }).ToList()
     };

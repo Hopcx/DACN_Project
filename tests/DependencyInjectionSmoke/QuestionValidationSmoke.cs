@@ -42,7 +42,9 @@ internal static class QuestionValidationSmoke
 
     private sealed class FakeRepository : IQuestionRepository
     {
-        public Task<List<Question>> GetAllQuestionsAsync(string? textSearch, int? subjectId, int? questionTypeId, int? questionLevelId) => Task.FromResult(new List<Question>());
+        public Task<List<Question>> GetAllQuestionsAsync(string? textSearch, int? subjectId, int? questionTypeId, int? questionLevelId,
+            int? chapterId = null, IReadOnlyCollection<int>? tagIds = null) => Task.FromResult(new List<Question>());
+        public Task<string?> MetadataProblemAsync(int subjectId, int? chapterId, IReadOnlyCollection<int> tagIds, int? questionId = null) => Task.FromResult<string?>(null);
         public Task<Question> GetQuestionByIdAsync(int id) => Task.FromResult<Question>(null!);
         public Task<List<Question>> GetQuestionsBySubjectIdAsync(int subjectId) => Task.FromResult(new List<Question>());
         public Task<Question> CreateQuestionAsync(Question question) => Task.FromResult(question);
@@ -50,7 +52,8 @@ internal static class QuestionValidationSmoke
         public Task<Question> DeleteQuestionAsync(int id) => Task.FromResult<Question>(null!);
         public Task<bool> ReferencesExistAsync(int subjectId, int questionTypeId, int? questionLevelId) => Task.FromResult(true);
         public Task<List<Subject>> GetAvailableSubjectsAsync() => Task.FromResult(new List<Subject>());
-        public Task<Question?> SaveWithAnswersAsync(int? id, Question question, IReadOnlyList<Answer> answers)
+        public Task<Question?> SaveWithAnswersAsync(int? id, Question question, IReadOnlyList<Answer> answers,
+            IReadOnlyCollection<int>? tagIds = null)
         {
             question.Answers = answers.ToList();
             return Task.FromResult<Question?>(question);

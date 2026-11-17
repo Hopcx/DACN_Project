@@ -20,9 +20,16 @@ namespace Project.Infrastructure.Persistence.Repositories
             _aDO = aDO;
         }
 
-        public async Task<List<Question>> GetAllQuestionsAsync(string? textSearch, int? subjectId, int? questionTypeId, int? questionLevelId)
+        public async Task<List<Question>> GetAllQuestionsAsync(string? textSearch, int? subjectId, int? questionTypeId, int? questionLevelId,
+            int? chapterId = null, IReadOnlyCollection<int>? tagIds = null)
         {
-            var query = _context.Questions.Include(x => x.Answers).AsNoTracking().AsQueryable();
+            var query = _context.Questions.Include(x => x.Answers).Include(x => x.QuestionTags).AsSplitQuery().AsNoTracking().AsQueryable();
+            if (chapterId.HasValue) query = query.Where(x => x.ChapterId == chapterId.Value);
+            if (tagIds is { Count: > 0 })
+            {
+                var wanted = tagIds.Distinct().ToList();
+                query = query.Where(x => x.QuestionTags.Any(t => wanted.Contains(t.TagId)));
+            }
 
             if (!string.IsNullOrWhiteSpace(textSearch))
             {
@@ -42,7 +49,8 @@ namespace Project.Infrastructure.Persistence.Repositories
 
         public async Task<Question> GetQuestionByIdAsync(int id)
         {
-            var question = await _context.Questions.Include(x => x.Answers).AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+            var question = await _context.Questions.Include(x => x.Answers).Include(x => x.QuestionTags).AsSplitQuery()
+                .AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
             if (question != null)
                 question.IsUsedInExam = await _context.ExamDetailQuestions.AnyAsync(x => x.QuestionId == id);
             return question;
@@ -101,8 +109,10 @@ namespace Project.Infrastructure.Persistence.Repositories
             return existing;
         }
 
-        public async Task<Question?> SaveWithAnswersAsync(int? id, Question incoming, IReadOnlyList<Answer> answers)
+        public async Task<Question?> SaveWithAnswersAsync(int? id, Question incoming, IReadOnlyList<Answer> answers,
+            IReadOnlyCollection<int>? tagIds = null)
         {
+            var newTags = (tagIds ?? Array.Empty<int>()).Distinct().ToList();
             await using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
             Question question;
             if (id.HasValue)
@@ -119,8 +129,12 @@ namespace Project.Infrastructure.Persistence.Repositories
                 question.QuestionTypeId = incoming.QuestionTypeId;
                 question.QuestionLevelId = incoming.QuestionLevelId;
                 question.DocumentPath = incoming.DocumentPath;
+                question.ChapterId = incoming.ChapterId;
+                question.Explanation = incoming.Explanation;
                 // Physical removal is safe only for questions never placed in an exam.
                 _context.Answers.RemoveRange(question.Answers);
+                // To-be T2: tập tag thay thế toàn bộ
+                _context.QuestionTags.RemoveRange(_context.QuestionTags.Where(x => x.QuestionId == id.Value));
                 await _context.SaveChangesAsync();
             }
             else
@@ -134,6 +148,8 @@ namespace Project.Infrastructure.Persistence.Repositories
                 answer.QuestionId = question.Id;
                 _context.Answers.Add(answer);
             }
+            foreach (var tagId in newTags)
+                _context.QuestionTags.Add(new QuestionTag { QuestionId = question.Id, TagId = tagId });
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
             return await GetQuestionByIdAsync(question.Id);
@@ -143,6 +159,26 @@ namespace Project.Infrastructure.Persistence.Repositories
             await _context.Subjects.AnyAsync(x => x.Id == subjectId && x.Status == 1) &&
             await _context.QuestionTypes.AnyAsync(x => x.Id == questionTypeId && x.Status == true) &&
             (!questionLevelId.HasValue || await _context.QuestionLevels.AnyAsync(x => x.Id == questionLevelId.Value && x.Status == true));
+
+        public async Task<string?> MetadataProblemAsync(int subjectId, int? chapterId, IReadOnlyCollection<int> tagIds, int? questionId = null)
+        {
+            if (chapterId.HasValue)
+            {
+                var chapter = await _context.Chapters.AsNoTracking().Where(x => x.Id == chapterId.Value)
+                    .Select(x => new { x.SubjectId, x.Status }).FirstOrDefaultAsync();
+                if (chapter == null || chapter.Status == 255) return "Chương không tồn tại hoặc đã bị ẩn.";
+                if (chapter.SubjectId != subjectId) return "Chương không thuộc môn của câu hỏi.";
+            }
+            if (tagIds.Count > 0)
+            {
+                var wanted = tagIds.Distinct().ToList();
+                // Tag ẩn/tắt chỉ chặn gắn MỚI: tag đã liên kết sẵn với câu đang sửa được giữ lại
+                var active = await _context.Tags.AsNoTracking().CountAsync(x => wanted.Contains(x.Id) &&
+                    (x.Status == 1 || (questionId.HasValue && x.QuestionTags.Any(qt => qt.QuestionId == questionId.Value))));
+                if (active != wanted.Count) return "Tag không tồn tại hoặc đã bị ẩn.";
+            }
+            return null;
+        }
 
         public Task<List<Subject>> GetAvailableSubjectsAsync() =>
             _context.Subjects.AsNoTracking().Where(x => x.Status == 1).OrderBy(x => x.Name).ToListAsync();

@@ -49,6 +49,7 @@ namespace Project.Api.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateQuestionLevel(int id, [FromBody] QuestionLevelCreateDto dto)
         {
+            if (IsSystemLevel(id)) return Conflict(ApiResponse<string>.Fail(SystemLevelMessage));
             var result = await _service.UpdateQuestionLevelAsync(id, dto);
             if (result == null)
                 return NotFound(ApiResponse<string>.Fail("Question level không tồn tại"));
@@ -59,11 +60,16 @@ namespace Project.Api.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteQuestionLevel(int id)
         {
+            if (IsSystemLevel(id)) return Conflict(ApiResponse<string>.Fail(SystemLevelMessage));
             var deleted = await _service.DeleteQuestionLevelAsync(id);
             if (!deleted)
                 return NotFound(ApiResponse<string>.Fail("Question level không tồn tại hoặc xóa thất bại"));
 
             return Ok(ApiResponse<string>.Ok($"Xóa Question level với ID {id} thành công"));
         }
+
+        // To-be T2 (QT2-1 a): 3 mức độ hệ thống Dễ/Trung bình/Khó (seed T1) không sửa, tắt hay xóa được
+        private const string SystemLevelMessage = "Mức độ hệ thống không thể sửa hoặc xóa.";
+        private static bool IsSystemLevel(int id) => id is >= 1 and <= 3;
     }
 }

@@ -6,7 +6,8 @@ namespace Project.Application.Interfaces.Services
 {
     public interface IQuestionService
     {
-        Task<List<QuestionResponseDto>> GetAllAsync(string? textSearch, int? subjectId, int? questionTypeId, int? questionLevelId);
+        Task<List<QuestionResponseDto>> GetAllAsync(string? textSearch, int? subjectId, int? questionTypeId, int? questionLevelId,
+            int? chapterId = null, IReadOnlyCollection<int>? tagIds = null);
         Task<QuestionResponseDto?> GetByIdAsync(int id);
         Task<QuestionResponseDto?> CreateAsync(QuestionCreateDto dto);
         Task<QuestionResponseDto?> UpdateAsync(int id, QuestionCreateDto dto);
