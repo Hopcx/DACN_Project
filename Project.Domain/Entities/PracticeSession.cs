@@ -16,6 +16,8 @@ public class PracticeSession
     public string CriteriaJson { get; set; } = "{}";
     public string SnapshotJson { get; set; } = null!;
     public string DraftJson { get; set; } = "[]";
+    // To-be T6: Guid câu (trong snapshot) đã "kiểm tra" ở chế độ perQuestion — đã chốt, không đổi lựa chọn được.
+    public string CheckedJson { get; set; } = "[]";
     public int Revision { get; set; }
     public int QuestionCount { get; set; }
     public int? CorrectCount { get; set; }

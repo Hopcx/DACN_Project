@@ -23,6 +23,7 @@ public class PracticeSessionConfiguration : IEntityTypeConfiguration<PracticeSes
         entity.Property(x => x.CriteriaJson).HasColumnType("nvarchar(max)").IsRequired();
         entity.Property(x => x.SnapshotJson).HasColumnType("nvarchar(max)").IsRequired();
         entity.Property(x => x.DraftJson).HasColumnType("nvarchar(max)").IsRequired();
+        entity.Property(x => x.CheckedJson).HasColumnType("nvarchar(max)").IsRequired().HasDefaultValue("[]");
         entity.HasIndex(x => new { x.UserId, x.CreatedAtUtc });
         entity.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
         entity.HasOne<Subject>().WithMany().HasForeignKey(x => x.SubjectId).OnDelete(DeleteBehavior.Restrict);
