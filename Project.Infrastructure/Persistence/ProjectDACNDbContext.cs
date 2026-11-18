@@ -64,6 +64,7 @@ namespace Project.Infrastructure.Persistence
         public DbSet<Chapter> Chapters { get; set; }
         public DbSet<Tag> Tags { get; set; }
         public DbSet<QuestionTag> QuestionTags { get; set; }
+        public DbSet<PracticeSession> PracticeSessions { get; set; }
 
         public virtual DbSet<QuestionType> QuestionTypes { get; set; }
 

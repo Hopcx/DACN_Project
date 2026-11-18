@@ -1,0 +1,84 @@
+using System.Text.Json;
+using Project.Application.DTOs.AttemptDTO;
+using Project.Application.Services;
+using Project.Domain.Entities;
+
+// To-be T5: chuẩn hóa tiêu chí, chọn ngẫu nhiên không lặp, snapshot luyện tập (điểm 1, lời giải), DTO an toàn, chấm.
+internal static class PracticeSnapshotSmoke
+{
+    public static void Run()
+    {
+        var (ok, error) = PracticeSnapshotFactory.Normalize(3, new[] { 5, 2, 5 }, null, new[] { 9 }, 10, null);
+        Check(error == null && ok!.ChapterIds.SequenceEqual(new[] { 2, 5 }) && ok.QuestionLevelIds.Count == 0 &&
+            ok.TagIds.SequenceEqual(new[] { 9 }) && ok.RevealMode == "end", "Criteria must be deduped, sorted, default 'end'.");
+        Check(PracticeSnapshotFactory.Normalize(3, null, null, null, 1, " perQuestion ").Value?.RevealMode == "perQuestion", "perQuestion accepted.");
+        foreach (var bad in new[]
+        {
+            PracticeSnapshotFactory.Normalize(0, null, null, null, 10, "end"),
+            PracticeSnapshotFactory.Normalize(3, null, null, null, 0, "end"),
+            PracticeSnapshotFactory.Normalize(3, null, null, null, 51, "end"),
+            PracticeSnapshotFactory.Normalize(3, null, null, null, 10, "all"),
+            PracticeSnapshotFactory.Normalize(3, new[] { 0 }, null, null, 10, "end"),
+            PracticeSnapshotFactory.Normalize(3, null, Enumerable.Range(1, 21), null, 10, "end"),
+        }) Check(bad.Value == null && bad.Error != null, "Invalid criteria accepted.");
+
+        var pool = Enumerable.Range(1, 30).ToArray();
+        var picked = PracticeSnapshotFactory.Pick(pool, 10, new Random(7));
+        Check(picked.Count == 10 && picked.Distinct().Count() == 10 && picked.All(pool.Contains), "Pick must return distinct items from the pool.");
+        Check(PracticeSnapshotFactory.Pick(pool, 30, new Random(1)).Order().SequenceEqual(pool), "Pick all must be a permutation.");
+        Check(pool.SequenceEqual(Enumerable.Range(1, 30)), "Pick must not mutate the pool.");
+        Reject(() => PracticeSnapshotFactory.Pick(pool, 31, new Random(1)));
+
+        var good = Make(1, 2, "  Vì A  ");
+        var multi = Make(2, 3, null);
+        var hidden = Make(3, 2, null); hidden.Status = 0;
+        var otherSubject = Make(4, 2, null); otherSubject.SubjectId = 99;
+        var badSet = Make(5, 2, null); badSet.Answers.First(x => !x.IsCorrect).IsCorrect = true; // hai đáp án đúng cho loại 2
+        Check(PracticeSnapshotFactory.IsUsable(good, 1) && PracticeSnapshotFactory.IsUsable(multi, 1), "Valid questions must be usable.");
+        Check(!PracticeSnapshotFactory.IsUsable(hidden, 1) && !PracticeSnapshotFactory.IsUsable(otherSubject, 1) &&
+            !PracticeSnapshotFactory.IsUsable(badSet, 1), "Invalid questions must be excluded.");
+
+        var snapshot = PracticeSnapshotFactory.Create(1, new[] { multi, good });
+        Check(snapshot.Version == 2 && snapshot.ExamId == 0 && snapshot.ExamDetailId == 0 && snapshot.VariantCode == "PRACTICE",
+            "Practice snapshot header.");
+        Check(snapshot.Questions.Select(x => x.SourceQuestionId).SequenceEqual(new[] { 2, 1 }) &&
+            snapshot.Questions.All(x => x.Point == 1), "Order kept and each question worth 1.");
+        Check(snapshot.Questions[1].Explanation == "Vì A" && snapshot.Questions[0].Explanation == null, "Explanation captured.");
+        Reject(() => PracticeSnapshotFactory.Create(1, new[] { good, hidden }));
+        Reject(() => PracticeSnapshotFactory.Create(1, new[] { good, good }));
+        Reject(() => PracticeSnapshotFactory.Create(1, Array.Empty<Question>()));
+
+        var safe = JsonSerializer.Serialize(AttemptSnapshotFactory.ForStudent(snapshot));
+        Check(!safe.Contains("IsCorrect") && !safe.Contains("Explanation") && !safe.Contains("Vì A") && !safe.Contains("Point"),
+            "Practice DTO must not leak keys, points or explanation.");
+
+        // Chấm: câu 1 (nhiều đáp án) chọn đủ → đúng; câu 2 chọn sai → 0. Tổng = số câu đúng.
+        var q0 = snapshot.Questions[0]; var q1 = snapshot.Questions[1];
+        var answers = new[]
+        {
+            new AttemptAnswerDto(q0.Id, q0.Options.Where(x => x.IsCorrect).Select(x => x.Id).ToArray()),
+            new AttemptAnswerDto(q1.Id, new[] { q1.Options.First(x => !x.IsCorrect).Id })
+        };
+        var score = AttemptScoring.Calculate(snapshot, answers, 0);
+        Check(score.RawTotal == 1, $"Practice score must count correct questions, got {score.RawTotal}.");
+        Console.WriteLine("PRACTICE_SNAPSHOT_CRITERIA_PICK_USABLE_SAFE_DTO_SCORING=PASS (isolated; no SQL/API)");
+    }
+
+    // Loại 2: 3 đáp án, đáp án Id*10 đúng; loại 3: 3 đáp án, hai đáp án đúng.
+    private static Question Make(int id, int type, string? explanation)
+    {
+        var question = new Question { Id = id, SubjectId = 1, Status = 1, QuestionTypeId = type, Content = $"Q{id}", Explanation = explanation };
+        for (var i = 0; i < 3; i++)
+            question.Answers.Add(new Answer { Id = id * 10 + i, QuestionId = id, Status = 1, Content = $"Option {i}",
+                IsCorrect = i == 0 || (type == 3 && i == 1) });
+        return question;
+    }
+
+    private static void Check(bool condition, string message) { if (!condition) throw new Exception(message); }
+    private static void Reject(Action action)
+    {
+        try { action(); }
+        catch (ArgumentException) { return; }
+        throw new Exception("Invalid practice input accepted.");
+    }
+}
