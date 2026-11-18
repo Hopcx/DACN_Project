@@ -21,22 +21,34 @@ internal static class AttemptSnapshotSmoke
         var variant = new ExamDetail { Id = 2, ExamId = 1, Code = "QA", Status = 1 };
         for (var i = 1; i <= 2; i++)
         {
-            var question = new Question { Id = i, SubjectId = 1, Status = 1, QuestionTypeId = i + 1, Content = $"Question {i}" };
+            var question = new Question { Id = i, SubjectId = 1, Status = 1, QuestionTypeId = i + 1, Content = $"Question {i}",
+                Explanation = i == 1 ? "  Vì A đúng  " : "   " };
             question.Answers.Add(new Answer { Id = i * 10, QuestionId = i, Status = 1, Content = "Option A", IsCorrect = true });
             question.Answers.Add(new Answer { Id = i * 10 + 1, QuestionId = i, Status = 1, Content = "Option B", IsCorrect = i == 2 });
             variant.ExamDetailQuestions.Add(new ExamDetailQuestion { Id = i, ExamDetailId = 2, QuestionId = i, Question = question, Point = 5 });
         }
         var snapshot = AttemptSnapshotFactory.Create(exam, variant);
+        // To-be T4: snapshot v2 chụp lời giải (trim, rỗng → null)
+        Check(snapshot.Version == 2 && AttemptSnapshot.CurrentVersion == 2, "New snapshots must be version 2.");
+        Check(snapshot.Questions[0].Explanation == "Vì A đúng", "Explanation must be captured and trimmed.");
+        Check(snapshot.Questions[1].Explanation == null, "Blank explanation must become null.");
         var serialized = JsonSerializer.Serialize(snapshot);
         var restored = JsonSerializer.Deserialize<AttemptSnapshot>(serialized)!;
         Check(restored.Questions[1].Options.All(x => x.IsCorrect), "Server snapshot lost answer keys on serialization.");
+        Check(restored.Questions[0].Explanation == "Vì A đúng", "Explanation lost on serialization.");
         var sourceQuestion = variant.ExamDetailQuestions.First().Question;
         sourceQuestion.Content = "Changed after start";
+        sourceQuestion.Explanation = "Changed explanation";
         sourceQuestion.Answers.First().Content = "Changed option";
         sourceQuestion.Answers.First().IsCorrect = false;
         sourceQuestion.Answers.Clear();
         Check(JsonSerializer.Serialize(snapshot) == serialized, "Snapshot changed with the live question bank.");
         Check(JsonSerializer.Serialize(restored) == serialized, "Snapshot round-trip changed IDs/content/keys.");
+        // Snapshot v1 (trước T4) không có Explanation: đọc bằng options của API vẫn được, Explanation = null
+        const string v1 = "{\"version\":1,\"examId\":1,\"examDetailId\":2,\"examName\":\"Old\",\"variantCode\":\"QA\",\"questions\":[{\"id\":\"6f0c2d7e-0a3b-4b8e-9a51-2b7f4f7d1c11\",\"sourceQuestionId\":1,\"questionTypeId\":2,\"content\":\"Q\",\"point\":1,\"options\":[{\"id\":\"0b9f1c4a-5d2e-4f63-8a7b-1c2d3e4f5a6b\",\"sourceAnswerId\":10,\"content\":\"A\",\"isCorrect\":true}]}]}";
+        var legacy = JsonSerializer.Deserialize<AttemptSnapshot>(v1, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        Check(legacy.Version == 1 && legacy.Questions.Count == 1 && legacy.Questions[0].Explanation == null &&
+            legacy.Questions[0].Options[0].IsCorrect, "Snapshot v1 must still deserialize with Explanation = null.");
 
         var safe = JsonSerializer.SerializeToElement(AttemptSnapshotFactory.ForStudent(restored));
         foreach (var question in safe.EnumerateArray())

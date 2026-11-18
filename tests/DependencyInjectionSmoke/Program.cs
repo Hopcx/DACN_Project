@@ -43,6 +43,9 @@ services.AddInfrastructure(configuration);
 services.AddScoped<IExamVariantService, ExamVariantStore>();
 services.AddScoped<AttemptFinalizer>();
 services.AddScoped<AuditWriter>();
+services.AddScoped<BestEffortAudit>();
+services.AddScoped<ChapterStore>();
+services.AddScoped<TagStore>();
 services.AddHttpContextAccessor();
 
 using var provider = services.BuildServiceProvider(validateScopes: true);
@@ -72,7 +75,7 @@ var controllerTypes = new[]
     , typeof(QuestionController), typeof(QuestionImportController), typeof(TeacherClassController),
     typeof(StudentAttemptController), typeof(AnswerController), typeof(ExamController),
     typeof(QuestionExportController), typeof(AccountExcelController), typeof(AdminAuditController),
-    typeof(TeacherOverviewController)
+    typeof(TeacherOverviewController), typeof(ChapterController), typeof(TagController)
 };
 
 foreach (var controllerType in controllerTypes)

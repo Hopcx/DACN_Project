@@ -33,9 +33,10 @@ public static class AttemptSnapshotFactory
                 throw new ArgumentException("Tập đáp án của câu hỏi không hợp lệ.");
             questions.Add(new AttemptQuestionSnapshot(Guid.NewGuid(), question.Id, question.QuestionTypeId,
                 question.Content, link.Point, Array.AsReadOnly(answers.Select(answer =>
-                    new AttemptOptionSnapshot(Guid.NewGuid(), answer.Id, answer.Content, answer.IsCorrect)).ToArray())));
+                    new AttemptOptionSnapshot(Guid.NewGuid(), answer.Id, answer.Content, answer.IsCorrect)).ToArray()),
+                string.IsNullOrWhiteSpace(question.Explanation) ? null : question.Explanation.Trim()));
         }
-        return new AttemptSnapshot(1, exam.Id, variant.Id, exam.Name, variant.Code, questions.AsReadOnly());
+        return new AttemptSnapshot(AttemptSnapshot.CurrentVersion, exam.Id, variant.Id, exam.Name, variant.Code, questions.AsReadOnly());
     }
 
     public static IReadOnlyList<AttemptQuestionDto> ForStudent(AttemptSnapshot snapshot) =>

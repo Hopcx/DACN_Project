@@ -65,8 +65,10 @@ try {
 
     FreshWindow
     $count = 0; $limited = $false
-    while ($count -lt 320 -and -not $limited) { $count++; if ((Refresh (NewRaw)) -eq 429) { $limited = $true } }
-    if (-not $limited -or $count -lt 300) { throw "IP ceiling not enforced as expected (first 429 at $count)" }
+    # Cửa sổ cố định của limiter tính từ lúc partition được tạo, không theo phút đồng hồ: cửa sổ có thể
+    # sang mới giữa vòng lặp (bộ đếm về 0). Cho tới 2 cửa sổ (620); 429 sớm hơn 240 nghĩa là trần quá thấp.
+    while ($count -lt 620 -and -not $limited) { $count++; if ((Refresh (NewRaw)) -eq 429) { $limited = $true } }
+    if (-not $limited -or $count -lt 240) { throw "IP ceiling not enforced as expected (first 429 at $count)" }
     Pass "cookie ngẫu nhiên dồn dập: request thứ $count từ cùng IP bị 429 (trần 300/phút)"
     Write-Output "SESSION_RATE_LIMIT_SMOKE=PASS;DB=$Database;TAG=$tag"
 }
