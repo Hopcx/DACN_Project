@@ -109,3 +109,11 @@ Không thêm migration (schema từ T1 `20261117021231_ToBeT1QuestionMetadata`).
 **Mức độ hệ thống**: `PUT/DELETE /web/question-levels/{1|2|3}` → 409.
 
 **Audit** (best-effort, ghi sau khi thao tác thành công bằng SaveChanges riêng; lỗi chỉ log): `question.create/update/hide/restore`, `chapter.create/update/hide`, `tag.create/update/hide`. Mô tả chỉ có ID, môn, chương, số tag, trạng thái; không chứa nội dung câu hỏi hay lời giải.
+
+## To-be T4 — snapshot v2 có lời giải tại `dev/Hop`
+
+Không migration. Lượt thi bắt đầu sau khi triển khai lưu `SnapshotJson` `Version = 2`: mỗi câu có thêm `Explanation` chụp từ `Questions.Explanation` lúc bắt đầu (trim, rỗng → null). Lượt cũ `Version = 1` giữ nguyên, không bổ sung lời giải từ ngân hàng câu hỏi.
+
+`GET /web/attempts/{id}` (làm bài) **không** đổi: câu không có `explanation`, đáp án không có `isCorrect`.
+
+`GET /web/attempts/{id}/review` giữ nguyên điều kiện mở (chủ bài, đã chốt, `AllowViewResult`, sau giờ kết thúc lịch, không bị hủy); response thêm `snapshotVersion` (1 hoặc 2) và `questions[].explanation` (string hoặc null).
