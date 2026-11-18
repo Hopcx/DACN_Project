@@ -7,7 +7,7 @@ param(
     [string]$LogDir = ''
 )
 # G7 - bộ UAT tự động: chạy lần lượt các smoke hiện có (mỗi smoke tự tạo và dọn fixture theo tag), in bảng tổng kết.
-# Cần: API (Development) trỏ DB bản sao ở $BaseUrl, Vite HTTPS ở https://localhost:5173 (hai smoke trình duyệt cố định cổng này;
+# Cần: API (Development) trỏ DB bản sao ở $BaseUrl, Vite HTTPS ở https://localhost:5173 (các smoke trình duyệt cố định cổng này;
 # $FrontendUrl chỉ dùng cho bước kiểm trước), sqlcmd, node, Chrome.
 # Không tự khởi động API/Vite. Chạy từ thư mục gốc DACN_Project. Exit code 1 nếu có smoke FAIL.
 $ErrorActionPreference = 'Stop'
@@ -31,6 +31,7 @@ $suite = @(
     @{ Name = 'TaskToBeT6PracticeCheckApiSmoke'; Browser = $false; Marker = 'TOBE_T6_PRACTICE_CHECK_SMOKE' },
     @{ Name = 'TaskP1RoleRegressionSmoke';     Browser = $true;  Marker = 'P1_ROLE_REGRESSION_SMOKE' },
     @{ Name = 'TaskP4FrontendSmoke';           Browser = $true;  Marker = 'P4_FRONTEND_SMOKE' },
+    @{ Name = 'TaskToBeT7PracticeFrontendSmoke'; Browser = $true; Marker = 'TOBE_T7_PRACTICE_FRONTEND_SMOKE' },
     @{ Name = 'TaskSessionRateLimitApiSmoke';  Browser = $false; Marker = 'SESSION_RATE_LIMIT_SMOKE' }
 )
 if ($Only.Count -gt 0) { $suite = @($suite | Where-Object { $Only -contains $_.Name }) }
