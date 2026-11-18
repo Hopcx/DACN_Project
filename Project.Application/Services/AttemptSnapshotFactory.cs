@@ -19,25 +19,39 @@ public static class AttemptSnapshotFactory
         foreach (var link in links)
         {
             var question = link.Question;
-            if (link.ExamDetailId != variant.Id || question == null || question.Id <= 0 ||
-                question.Id != link.QuestionId || question.SubjectId != exam.SubjectId ||
-                question.Status != 1 || question.QuestionTypeId is < 1 or > 3 ||
-                string.IsNullOrWhiteSpace(question.Content) || !double.IsFinite(link.Point) || link.Point < 0)
+            if (link.ExamDetailId != variant.Id || question == null || question.Id != link.QuestionId ||
+                question.SubjectId != exam.SubjectId || !QuestionShapeValid(question) ||
+                !double.IsFinite(link.Point) || link.Point < 0)
                 throw new ArgumentException("Câu hỏi của mã đề không hợp lệ hoặc không được hỗ trợ.");
-            var answers = question.Answers.Where(x => x.Status == 1).OrderBy(x => x.Id).ToArray();
-            var correct = answers.Count(x => x.IsCorrect);
-            if (answers.Length < 2 || answers.Select(x => x.Id).Distinct().Count() != answers.Length ||
-                answers.Any(x => x.Id <= 0 || x.QuestionId != question.Id || string.IsNullOrWhiteSpace(x.Content)) ||
-                (question.QuestionTypeId == 1 && answers.Length != 2) ||
-                (question.QuestionTypeId is 1 or 2 && correct != 1) || correct == 0)
+            if (!AnswerSetValid(question))
                 throw new ArgumentException("Tập đáp án của câu hỏi không hợp lệ.");
-            questions.Add(new AttemptQuestionSnapshot(Guid.NewGuid(), question.Id, question.QuestionTypeId,
-                question.Content, link.Point, Array.AsReadOnly(answers.Select(answer =>
-                    new AttemptOptionSnapshot(Guid.NewGuid(), answer.Id, answer.Content, answer.IsCorrect)).ToArray()),
-                string.IsNullOrWhiteSpace(question.Explanation) ? null : question.Explanation.Trim()));
+            questions.Add(BuildQuestion(question, link.Point));
         }
         return new AttemptSnapshot(AttemptSnapshot.CurrentVersion, exam.Id, variant.Id, exam.Name, variant.Code, questions.AsReadOnly());
     }
+
+    // Dùng chung cho Exam và Practice (To-be T5): câu hoạt động, loại 1–3, có nội dung.
+    public static bool QuestionShapeValid(Question question) =>
+        question.Id > 0 && question.Status == 1 && question.QuestionTypeId is >= 1 and <= 3 &&
+        !string.IsNullOrWhiteSpace(question.Content);
+
+    // Đáp án hoạt động: ≥ 2, không trùng, có nội dung; Đúng/Sai đúng 2; loại 1–2 đúng một đáp án đúng; loại 3 ≥ 1.
+    public static bool AnswerSetValid(Question question)
+    {
+        var answers = question.Answers.Where(x => x.Status == 1).ToArray();
+        var correct = answers.Count(x => x.IsCorrect);
+        return answers.Length >= 2 && answers.Select(x => x.Id).Distinct().Count() == answers.Length &&
+            !answers.Any(x => x.Id <= 0 || x.QuestionId != question.Id || string.IsNullOrWhiteSpace(x.Content)) &&
+            !(question.QuestionTypeId == 1 && answers.Length != 2) &&
+            !(question.QuestionTypeId is 1 or 2 && correct != 1) && correct != 0;
+    }
+
+    // Chụp một câu: đáp án theo Id, Guid mới, lời giải trim (rỗng → null). Gọi sau khi đã kiểm hai hàm trên.
+    public static AttemptQuestionSnapshot BuildQuestion(Question question, double point) =>
+        new(Guid.NewGuid(), question.Id, question.QuestionTypeId, question.Content, point,
+            Array.AsReadOnly(question.Answers.Where(x => x.Status == 1).OrderBy(x => x.Id).Select(answer =>
+                new AttemptOptionSnapshot(Guid.NewGuid(), answer.Id, answer.Content, answer.IsCorrect)).ToArray()),
+            string.IsNullOrWhiteSpace(question.Explanation) ? null : question.Explanation.Trim());
 
     public static IReadOnlyList<AttemptQuestionDto> ForStudent(AttemptSnapshot snapshot) =>
         Array.AsReadOnly(snapshot.Questions.Select(question => new AttemptQuestionDto(
