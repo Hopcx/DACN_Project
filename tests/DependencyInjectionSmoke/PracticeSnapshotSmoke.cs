@@ -62,6 +62,36 @@ internal static class PracticeSnapshotSmoke
         var score = AttemptScoring.Calculate(snapshot, answers, 0);
         Check(score.RawTotal == 1, $"Practice score must count correct questions, got {score.RawTotal}.");
         Console.WriteLine("PRACTICE_SNAPSHOT_CRITERIA_PICK_USABLE_SAFE_DTO_SCORING=PASS (isolated; no SQL/API)");
+
+        // To-be T6: chốt từng câu, kết quả câu đã chốt, khóa lựa chọn khi lưu nháp
+        var empty = AttemptSnapshotFactory.ValidateDraft(snapshot, Array.Empty<AttemptAnswerDto>());
+        var right = q0.Options.Where(x => x.IsCorrect).Select(x => x.Id).ToArray();
+        var (d1, c1) = PracticeCheck.Apply(snapshot, empty, Array.Empty<Guid>(), q0.Id, right);
+        Check(c1.SequenceEqual(new[] { q0.Id }) && d1.First(x => x.QuestionId == q0.Id).SelectedAnswerIds.ToHashSet().SetEquals(right),
+            "Apply must store the selection and lock the question.");
+        var r0 = PracticeCheck.Result(q0, d1.First(x => x.QuestionId == q0.Id).SelectedAnswerIds);
+        Check(r0.IsCorrect && r0.CorrectAnswerIds.ToHashSet().SetEquals(right) && r0.Explanation == null, "Correct check result.");
+        var wrong = new[] { q1.Options.First(x => !x.IsCorrect).Id };
+        var (d2, c2) = PracticeCheck.Apply(snapshot, d1, c1, q1.Id, wrong);
+        var r1 = PracticeCheck.Result(q1, d2.First(x => x.QuestionId == q1.Id).SelectedAnswerIds);
+        Check(!r1.IsCorrect && r1.Explanation == "Vì A" && r1.CorrectAnswerIds.Count == 1, "Wrong check result with explanation.");
+        Check(PracticeCheck.Results(snapshot, d2, c2).Select(x => x.QuestionId).SequenceEqual(new[] { q0.Id, q1.Id }) &&
+            PracticeCheck.Results(snapshot, d1, c1).Count == 1, "Results only for checked questions, in snapshot order.");
+        Reject(() => PracticeCheck.Apply(snapshot, d1, c1, q0.Id, right));                       // đã chốt
+        Reject(() => PracticeCheck.Apply(snapshot, d1, c1, q1.Id, Array.Empty<Guid>()));          // trống
+        Reject(() => PracticeCheck.Apply(snapshot, d1, c1, Guid.NewGuid(), wrong));                // không thuộc phiên
+        Reject(() => PracticeCheck.Apply(snapshot, d1, c1, q1.Id, q1.Options.Select(x => x.Id).ToArray())); // loại 2 chọn 2
+
+        // Merge: bỏ qua câu đã chốt → giữ; gửi lại y nguyên → được; đổi → khóa; câu chưa chốt thay toàn bộ như T5
+        var kept = PracticeCheck.Merge(snapshot, d1, c1, Array.Empty<AttemptAnswerDto>());
+        Check(kept.First(x => x.QuestionId == q0.Id).SelectedAnswerIds.ToHashSet().SetEquals(right), "Omitted checked question keeps its selection.");
+        var same = PracticeCheck.Merge(snapshot, d1, c1, new[] { new AttemptAnswerDto(q0.Id, right.Reverse().ToArray()), new AttemptAnswerDto(q1.Id, wrong) });
+        Check(same.First(x => x.QuestionId == q1.Id).SelectedAnswerIds.SequenceEqual(wrong), "Unchecked question saved normally.");
+        var locked = false;
+        try { PracticeCheck.Merge(snapshot, d1, c1, new[] { new AttemptAnswerDto(q0.Id, new[] { right[0] }) }); }
+        catch (PracticeQuestionLockedException) { locked = true; }
+        Check(locked, "Changing a checked question must be rejected.");
+        Console.WriteLine("PRACTICE_CHECK_APPLY_RESULT_MERGE_LOCK=PASS (isolated; no SQL/API)");
     }
 
     // Loại 2: 3 đáp án, đáp án Id*10 đúng; loại 3: 3 đáp án, hai đáp án đúng.

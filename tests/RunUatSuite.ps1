@@ -28,6 +28,7 @@ $suite = @(
     @{ Name = 'TaskToBeT2QuestionMetadataApiSmoke'; Browser = $false; Marker = 'TOBE_T2_QUESTION_METADATA_SMOKE' },
     @{ Name = 'TaskToBeT4SnapshotExplanationApiSmoke'; Browser = $false; Marker = 'TOBE_T4_SNAPSHOT_EXPLANATION_SMOKE' },
     @{ Name = 'TaskToBeT5PracticeApiSmoke'; Browser = $false; Marker = 'TOBE_T5_PRACTICE_SMOKE' },
+    @{ Name = 'TaskToBeT6PracticeCheckApiSmoke'; Browser = $false; Marker = 'TOBE_T6_PRACTICE_CHECK_SMOKE' },
     @{ Name = 'TaskP1RoleRegressionSmoke';     Browser = $true;  Marker = 'P1_ROLE_REGRESSION_SMOKE' },
     @{ Name = 'TaskP4FrontendSmoke';           Browser = $true;  Marker = 'P4_FRONTEND_SMOKE' },
     @{ Name = 'TaskSessionRateLimitApiSmoke';  Browser = $false; Marker = 'SESSION_RATE_LIMIT_SMOKE' }

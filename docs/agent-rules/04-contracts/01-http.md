@@ -126,11 +126,20 @@ Route `/web/student/practice`, policy `Student`. Chỉ môn đang hoạt động
 
 - `GET options` → `{minQuestions: 1, maxQuestions: 50, maxOpenSessions: 3, subjects[{id, name, questionCount, chapters[{id, name, questionCount}], levels[...], tags[...]}]}`. Đếm chỉ câu dùng được (Status 1, loại 1–3, tập đáp án hợp lệ); chương chỉ Status 1; tag chỉ Status 1 và đang gắn câu.
 - `POST` `{subjectId, chapterIds?, questionLevelIds?, tagIds?, questionCount, revealMode}` → 201 trạng thái phiên. `questionCount` 1–50; mỗi danh sách lọc ≤ 20 ID dương (chương phải thuộc môn và Status 1, mức độ đang dùng, tag Status 1 — sai → 400), khớp bất kỳ trong danh sách, các nhóm AND; `revealMode` `end` (mặc định) hoặc `perQuestion`. Lỗi: 400 tiêu chí; 403 `PRACTICE_SUBJECT_FORBIDDEN`; 409 `PRACTICE_TOO_MANY_OPEN` (đã có 3 phiên `inProgress`); 409 `PRACTICE_NOT_ENOUGH_QUESTIONS` với `data {available, requested}`. Câu chọn ngẫu nhiên không lặp; snapshot là `AttemptSnapshot` v2 (điểm mỗi câu 1, có lời giải, chỉ server đọc).
-- Trạng thái phiên (POST, `GET {id}`, retry): `{id, subjectId, subjectName, kind, revealMode, state, revision, questionCount, correctCount, createdAtUtc, finishedAtUtc, criteria, questions[{id, questionTypeId, content, options[{id, content}]}], answers[{questionId, selectedAnswerIds}]}` — không có `isCorrect`, điểm hay `explanation`.
+- Trạng thái phiên (POST, `GET {id}`, retry): `{id, subjectId, subjectName, kind, revealMode, state, revision, questionCount, correctCount, createdAtUtc, finishedAtUtc, criteria, questions[{id, questionTypeId, content, options[{id, content}]}], answers[{questionId, selectedAnswerIds}]}` — `questions` không có `isCorrect`, điểm hay `explanation`; riêng phiên perQuestion có thêm `checked[]` (đáp án + lời giải của các câu đã chốt, xem To-be T6).
 - `GET mine?page=1&pageSize=10` (pageSize 1–50) → `{page, pageSize, totalCount, items[{id, subjectId, subjectName, kind, revealMode, state, questionCount, correctCount, createdAtUtc, finishedAtUtc}]}`, mới nhất trước.
 - `PUT {id}/answers` `{revision, answers}` → `{id, revision, answers}`; thay toàn bộ nháp; 409 `PRACTICE_CLOSED` / `CONCURRENCY_CONFLICT`; 400 `INVALID_SELECTION`.
 - `POST {id}/finish` `{revision}` → `{id, state, revision, questionCount, correctCount, finishedAtUtc}`; chấm tất cả-hoặc-không (Q3), `correctCount` = số câu đúng. Gọi lại khi đã finish trả cùng kết quả (không kiểm revision).
 - `GET {id}/review` (chỉ sau finish, nếu chưa → 409 `PRACTICE_NOT_FINISHED`) → `questions[{id, questionTypeId, content, selectedAnswerIds, isCorrect, options[{id, content, isCorrect}], explanation}]` + tổng.
-- `POST {id}/retry` → 201 phiên mới cùng câu gốc (lấy lại từ ngân hàng hiện tại, bỏ câu không còn dùng được, xáo thứ tự), cùng `revealMode`; `criteria.retryOf` = id gốc. Không còn câu → 409 `PRACTICE_NOT_ENOUGH_QUESTIONS`.
-- `DELETE {id}` → bỏ phiên `inProgress` (xóa hẳn); phiên đã finish → 409 `PRACTICE_FINISHED`.
-- `revealMode = perQuestion` được lưu nhưng tới T6 vẫn chỉ mở đáp án sau finish.
+- `POST {id}/retry` (T6: chỉ phiên đã finish, phiên đang làm → 409 `PRACTICE_NOT_FINISHED`) → 201 phiên mới cùng câu gốc (lấy lại từ ngân hàng hiện tại, bỏ câu không còn dùng được, xáo thứ tự), cùng `revealMode`; `criteria.retryOf` = id gốc. Không còn câu → 409 `PRACTICE_NOT_ENOUGH_QUESTIONS`.
+- `DELETE {id}` → bỏ phiên `inProgress` (xóa hẳn); phiên đã finish → 409 `PRACTICE_FINISHED`; T6: phiên đã chốt ≥ 1 câu → 409 `PRACTICE_HAS_CHECKED`.
+- `revealMode = perQuestion`: xem mục To-be T6.
+
+## To-be T6 — Luyện tập "kiểm tra từng câu" tại `dev/Hop`
+
+Migration `ToBeT6PracticeChecked` thêm cột `PracticeSessions.CheckedJson` nvarchar(max) NOT NULL default `'[]'` (Guid câu đã chốt).
+
+- `POST /web/student/practice/{id}/questions/{questionId}/check` `{revision, selectedAnswerIds}` — `questionId` là Guid câu trong phiên. Chỉ phiên `revealMode = perQuestion` (khác → 409 `PRACTICE_CHECK_NOT_ALLOWED`). Lưu lựa chọn câu đó vào nháp và chốt trong cùng giao dịch, tăng `revision`. Trả `{result: {questionId, selectedAnswerIds, isCorrect, correctAnswerIds, explanation}, revision}`. Câu đã chốt → trả lại kết quả cũ (không kiểm revision, cả khi phiên đã finish). Lỗi: 404 `PRACTICE_NOT_FOUND` / `PRACTICE_QUESTION_NOT_FOUND`; 409 `PRACTICE_CLOSED` (đã finish, câu chưa chốt), `CONCURRENCY_CONFLICT`; 400 `INVALID_SELECTION` (trống, đáp án không thuộc câu, loại 1–2 chọn > 1).
+- Trạng thái phiên (POST, `GET {id}`, retry) thêm `checked[]` cùng cấu trúc `result` — chỉ các câu đã chốt; câu chưa chốt vẫn không có đáp án/lời giải.
+- `PUT {id}/answers`: câu đã chốt bị bỏ qua trong payload → giữ lựa chọn cũ; gửi lựa chọn khác (kể cả `[]`) → 409 `PRACTICE_QUESTION_LOCKED`. Payload sai cấu trúc (đáp án không thuộc câu, trùng câu, quá số lượng) bị kiểm trước → 400 `INVALID_SELECTION`.
+- `finish`, `review` không đổi (chấm theo nháp đã gồm lựa chọn của câu đã chốt).
