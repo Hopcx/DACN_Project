@@ -1000,6 +1000,78 @@ namespace Project.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Project.Domain.Entities.PracticeSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("CorrectCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CriteriaJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeadlineUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DraftJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("FinishedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("QuestionCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RevealMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("SubjectId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubjectId");
+
+                    b.HasIndex("UserId", "CreatedAtUtc");
+
+                    b.ToTable("PracticeSessions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PracticeSessions_Kind", "[Kind] IN ('practice','mock')");
+
+                            t.HasCheckConstraint("CK_PracticeSessions_RevealMode", "[RevealMode] IN ('end','perQuestion')");
+
+                            t.HasCheckConstraint("CK_PracticeSessions_State", "[State] IN ('inProgress','finished')");
+                        });
+                });
+
             modelBuilder.Entity("Project.Domain.Entities.Question", b =>
                 {
                     b.Property<int>("Id")
@@ -1820,6 +1892,21 @@ namespace Project.Infrastructure.Migrations
                     b.HasOne("Project.Domain.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("TargetUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.PracticeSession", b =>
+                {
+                    b.HasOne("Project.Domain.Entities.Subject", null)
+                        .WithMany()
+                        .HasForeignKey("SubjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Project.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
