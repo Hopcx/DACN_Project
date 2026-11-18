@@ -140,10 +140,12 @@ public class StudentAttemptController : ControllerBase
             selectedAnswerIds = selected.TryGetValue(question.Id, out var ids) ? ids : Array.Empty<Guid>(),
             options = question.Options.Select(option => new {
                 id = option.Id, content = option.Content, isCorrect = option.IsCorrect
-            }).ToList()
+            }).ToList(),
+            // To-be T4: lời giải mở cùng điều kiện với đáp án đúng; snapshot v1 không có → null
+            explanation = question.Explanation
         }).ToList();
         return Ok(ApiResponse<object>.Ok(new {
-            attemptId = row.Id, state = row.State, reviewedFrom = "attemptSnapshot",
+            attemptId = row.Id, state = row.State, reviewedFrom = "attemptSnapshot", snapshotVersion = snapshot.Version,
             questions
         }));
     }
