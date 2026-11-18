@@ -17,11 +17,12 @@ public sealed record CreatePracticeRequest(int SubjectId, List<int>? ChapterIds,
     List<int>? TagIds, int QuestionCount, string? RevealMode);
 public sealed record PracticeSaveRequest(int Revision, IReadOnlyList<AttemptAnswerDto>? Answers);
 public sealed record PracticeFinishRequest(int Revision);
+public sealed record PracticeCheckRequest(int Revision, IReadOnlyList<Guid>? SelectedAnswerIds);
 
 /// <summary>
 /// To-be T5: Luyện tập của học viên. Chỉ môn của lớp đã được duyệt (Q18); chỉ chủ phiên thấy phiên (người khác 404).
 /// Không dùng ExamAttempts/lịch thi/worker. Mọi thao tác ghi của một học viên tuần tự hóa bằng app lock theo user.
-/// RevealMode 'perQuestion' được lưu nhưng tới T6 vẫn chỉ mở đáp án sau finish (QT5-4 a).
+/// RevealMode 'perQuestion' (T6): POST {id}/questions/{qid}/check chốt từng câu và trả đáp án + lời giải của câu đó.
 /// </summary>
 [ApiController]
 [Authorize(Policy = "Student")]
@@ -38,6 +39,8 @@ public class PracticeController : ControllerBase
     private static AttemptSnapshot Snapshot(PracticeSession row) => JsonSerializer.Deserialize<AttemptSnapshot>(row.SnapshotJson, Json)!;
     private static IReadOnlyList<AttemptAnswerDto> Draft(PracticeSession row) =>
         JsonSerializer.Deserialize<List<AttemptAnswerDto>>(row.DraftJson, Json)!;
+    private static IReadOnlyList<Guid> Checked(PracticeSession row) =>
+        JsonSerializer.Deserialize<List<Guid>>(row.CheckedJson, Json) ?? new List<Guid>();
 
     // Môn được luyện: lớp hoạt động có SubjectId, học viên là thành viên đã duyệt, môn hoạt động.
     private IQueryable<Subject> AllowedSubjects(Guid userId) => _db.Subjects.Where(subject => subject.Status == 1 &&
@@ -88,7 +91,9 @@ public class PracticeController : ControllerBase
             createdAtUtc = row.CreatedAtUtc, finishedAtUtc = row.FinishedAtUtc,
             criteria = JsonSerializer.Deserialize<JsonElement>(row.CriteriaJson),
             // Không có đáp án đúng, điểm hay lời giải trong DTO làm bài
-            questions = AttemptSnapshotFactory.ForStudent(Snapshot(row)), answers = Draft(row)
+            questions = AttemptSnapshotFactory.ForStudent(Snapshot(row)), answers = Draft(row),
+            // To-be T6: chỉ câu đã chốt mới có đáp án đúng + lời giải
+            @checked = PracticeCheck.Results(Snapshot(row), Draft(row), Checked(row))
         };
     }
 
@@ -215,7 +220,9 @@ public class PracticeController : ControllerBase
         if (row.State != "inProgress") return Deny("PRACTICE_CLOSED");
         if (request.Revision != row.Revision) return Deny("CONCURRENCY_CONFLICT");
         IReadOnlyList<AttemptAnswerDto> draft;
-        try { draft = AttemptSnapshotFactory.ValidateDraft(Snapshot(row), request.Answers); }
+        // T6: câu đã chốt giữ lựa chọn; payload đổi câu đã chốt → 409
+        try { draft = PracticeCheck.Merge(Snapshot(row), Draft(row), Checked(row), request.Answers); }
+        catch (PracticeQuestionLockedException) { return Deny("PRACTICE_QUESTION_LOCKED"); }
         catch (ArgumentException) { return BadRequest(ApiResponse<string>.Fail("INVALID_SELECTION")); }
         row.DraftJson = JsonSerializer.Serialize(draft, Json);
         row.Revision++;
@@ -248,6 +255,40 @@ public class PracticeController : ControllerBase
             id = row.Id, state = row.State, revision = row.Revision, questionCount = row.QuestionCount,
             correctCount = row.CorrectCount, finishedAtUtc = row.FinishedAtUtc
         }));
+    }
+
+    // To-be T6: "Kiểm tra câu này" (chỉ phiên perQuestion đang làm). Lưu lựa chọn gửi kèm và chốt câu trong cùng
+    // giao dịch; trả đúng/sai, đáp án đúng, lời giải của riêng câu đó. Câu đã chốt → trả lại kết quả cũ (idempotent).
+    [HttpPost("{id:guid}/questions/{questionId:guid}/check")]
+    public async Task<IActionResult> Check(Guid id, Guid questionId, [FromBody] PracticeCheckRequest request)
+    {
+        var userId = Actor(); if (userId == null) return Unauthorized();
+        await using var tx = await _db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+        await LockAsync(userId.Value);
+        var row = await Owned(id, userId.Value);
+        if (row == null) return NotFound(ApiResponse<string>.Fail(NotFoundCode));
+        if (row.RevealMode != "perQuestion") return Deny("PRACTICE_CHECK_NOT_ALLOWED");
+        var snapshot = Snapshot(row);
+        var question = snapshot.Questions.FirstOrDefault(x => x.Id == questionId);
+        if (question == null) return NotFound(ApiResponse<string>.Fail("PRACTICE_QUESTION_NOT_FOUND"));
+        var checkedIds = Checked(row);
+        if (checkedIds.Contains(questionId))
+        {
+            var previous = Draft(row).FirstOrDefault(x => x.QuestionId == questionId)?.SelectedAnswerIds ?? Array.Empty<Guid>();
+            await tx.CommitAsync();
+            return Ok(ApiResponse<object>.Ok(new { result = PracticeCheck.Result(question, previous), revision = row.Revision }));
+        }
+        if (row.State != "inProgress") return Deny("PRACTICE_CLOSED");
+        if (request.Revision != row.Revision) return Deny("CONCURRENCY_CONFLICT");
+        IReadOnlyList<AttemptAnswerDto> draft; IReadOnlyList<Guid> nextChecked;
+        try { (draft, nextChecked) = PracticeCheck.Apply(snapshot, Draft(row), checkedIds, questionId, request.SelectedAnswerIds); }
+        catch (ArgumentException) { return BadRequest(ApiResponse<string>.Fail("INVALID_SELECTION")); }
+        row.DraftJson = JsonSerializer.Serialize(draft, Json);
+        row.CheckedJson = JsonSerializer.Serialize(nextChecked, Json);
+        row.Revision++;
+        await _db.SaveChangesAsync(); await tx.CommitAsync();
+        var selected = draft.First(x => x.QuestionId == questionId).SelectedAnswerIds;
+        return Ok(ApiResponse<object>.Ok(new { result = PracticeCheck.Result(question, selected), revision = row.Revision }));
     }
 
     [HttpGet("{id:guid}/review")]
@@ -286,6 +327,8 @@ public class PracticeController : ControllerBase
         await LockAsync(userId.Value);
         var source = await _db.PracticeSessions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId);
         if (source == null) return NotFound(ApiResponse<string>.Fail(NotFoundCode));
+        // QT6-4 a: chỉ làm lại phiên đã nộp (không xem đáp án từng câu rồi làm lại bộ đó khi chưa nộp)
+        if (source.State != "finished") return Deny("PRACTICE_NOT_FINISHED");
         if (!await AllowedSubjects(userId.Value).AnyAsync(x => x.Id == source.SubjectId))
             return StatusCode(403, ApiResponse<string>.Fail("PRACTICE_SUBJECT_FORBIDDEN"));
         if (await OpenCountAsync(userId.Value) >= PracticeSnapshotFactory.MaxOpenSessions) return Deny("PRACTICE_TOO_MANY_OPEN");
@@ -311,6 +354,8 @@ public class PracticeController : ControllerBase
         var row = await Owned(id, userId.Value);
         if (row == null) return NotFound(ApiResponse<string>.Fail(NotFoundCode));
         if (row.State != "inProgress") return Deny("PRACTICE_FINISHED");
+        // QT6-4 a: đã xem đáp án ít nhất một câu thì không bỏ được, chỉ còn nộp
+        if (Checked(row).Count > 0) return Deny("PRACTICE_HAS_CHECKED");
         _db.PracticeSessions.Remove(row);
         await _db.SaveChangesAsync(); await tx.CommitAsync();
         return Ok(ApiResponse<object>.Ok(new { id }));
