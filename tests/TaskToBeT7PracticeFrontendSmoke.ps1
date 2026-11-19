@@ -57,12 +57,16 @@ COMMIT;
     # Hậu kiểm: 3 phiên (2 đã nộp 2/2 và 1/2, 1 phiên làm lại đang làm)
     $summary = Sql "SELECT STRING_AGG(CONCAT(State,':',RevealMode,':',ISNULL(CAST(CorrectCount AS varchar(5)),'-')),',') WITHIN GROUP (ORDER BY CreatedAtUtc) FROM dbo.PracticeSessions WHERE UserId='$student';"
     if ($summary -ne 'finished:end:2,finished:perQuestion:1,inProgress:perQuestion:-') { throw "SQL hậu kiểm lệch: $summary" }
-    Write-Output "TOBE_T7_PRACTICE_FRONTEND_SMOKE=PASS;DB=$Database;TAG=$tag;SQL=$summary"
+    # To-be T8: 2 câu được đánh dấu (1 ở phiên Cuối phiên sau ca bấm nhanh, 1 ở phiên Từng câu)
+    $flags = Sql "SELECT COUNT(*) FROM dbo.ReviewFlags WHERE UserId='$student' AND SourceKind='practice';"
+    if ($flags -ne '2') { throw "ReviewFlags lệch: $flags" }
+    Write-Output "TOBE_T7_PRACTICE_FRONTEND_SMOKE=PASS;DB=$Database;TAG=$tag;SQL=$summary;FLAGS=$flags"
 }
 finally {
     function Clean([string]$query) { try { Sql $query | Out-Null } catch { Write-Warning "Dọn lỗi: $($_.Exception.Message)" } }
     $users = "SELECT Id FROM dbo.Users WHERE Email=N'$email'"
     $subjects = "SELECT Id FROM dbo.Subjects WHERE Name=N'$subjectName'"
+    Clean "DELETE dbo.ReviewFlags WHERE UserId IN ($users);"
     Clean "DELETE dbo.PracticeSessions WHERE UserId IN ($users) OR SubjectId IN ($subjects);"
     Clean "DELETE a FROM dbo.Answers a JOIN dbo.Questions q ON q.Id=a.QuestionId WHERE q.SubjectId IN ($subjects); DELETE dbo.Questions WHERE SubjectId IN ($subjects);"
     Clean "DELETE dbo.ClassUsers WHERE ClassId IN (SELECT Id FROM dbo.Classes WHERE ClassCode=N'T7-$tag') OR UserId IN ($users);
