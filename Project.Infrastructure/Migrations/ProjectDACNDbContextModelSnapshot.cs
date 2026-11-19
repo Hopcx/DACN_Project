@@ -1308,6 +1308,32 @@ namespace Project.Infrastructure.Migrations
                     b.ToTable("RefreshTokens");
                 });
 
+            modelBuilder.Entity("Project.Domain.Entities.ReviewFlag", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SourceKind")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("SourceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("SnapshotQuestionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("UserId", "SourceKind", "SourceId", "SnapshotQuestionId");
+
+                    b.ToTable("ReviewFlags", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ReviewFlags_SourceKind", "[SourceKind] IN ('exam','practice')");
+                        });
+                });
+
             modelBuilder.Entity("Project.Domain.Entities.Room", b =>
                 {
                     b.Property<int>("Id")
@@ -1977,6 +2003,15 @@ namespace Project.Infrastructure.Migrations
                     b.Navigation("Question");
 
                     b.Navigation("Tag");
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.ReviewFlag", b =>
+                {
+                    b.HasOne("Project.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Project.Domain.Entities.Submission", b =>

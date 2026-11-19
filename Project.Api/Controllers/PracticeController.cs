@@ -357,7 +357,11 @@ public class PracticeController : ControllerBase
         // QT6-4 a: đã xem đáp án ít nhất một câu thì không bỏ được, chỉ còn nộp
         if (Checked(row).Count > 0) return Deny("PRACTICE_HAS_CHECKED");
         _db.PracticeSessions.Remove(row);
-        await _db.SaveChangesAsync(); await tx.CommitAsync();
+        await _db.SaveChangesAsync();
+        // To-be T8 (QT8-5 a): xóa luôn đánh dấu câu của phiên bị bỏ, cùng giao dịch
+        await _db.ReviewFlags.Where(x => x.UserId == userId.Value && x.SourceKind == ReviewFlagRules.Practice && x.SourceId == id)
+            .ExecuteDeleteAsync();
+        await tx.CommitAsync();
         return Ok(ApiResponse<object>.Ok(new { id }));
     }
 }
