@@ -154,3 +154,14 @@ Route `/web/review-flags`, policy `Student`. Nguồn: `exam` = `ExamAttempts.Id`
 - `PUT` `{sourceKind, sourceId, questionId}` → `{..., flagged: true}`; câu không thuộc snapshot → 400 `REVIEW_FLAG_QUESTION_INVALID`; đã đánh dấu → vẫn 200.
 - `DELETE ?sourceKind=&sourceId=&questionId=` → `{..., flagged: false}`; chưa đánh dấu → vẫn 200.
 - `DELETE /web/student/practice/{id}` (bỏ phiên) xóa luôn đánh dấu của phiên trong cùng giao dịch.
+
+## To-be T9 — Thi thử (Mock Exam) tại `dev/Hop`
+
+Không migration (dùng `PracticeSessions.Kind = 'mock'` và `DeadlineUtc` có sẵn). Không tính vào điểm lớp/xếp hạng (Q7); chưa có so sánh/xếp hạng (Q8).
+
+- `POST /web/student/practice` nhận thêm `kind` ('practice' mặc định | 'mock') và `durationMinutes` (mock: bắt buộc, 5–180; practice: bỏ qua). Mock chỉ nhận `revealMode` 'end' (gửi 'perQuestion' → 400). `DeadlineUtc` = lúc tạo + thời lượng. Giới hạn đang làm: 3 phiên practice (409 `PRACTICE_TOO_MANY_OPEN`), 1 phiên mock (409 `MOCK_ALREADY_OPEN`), tính riêng.
+- `GET options` thêm `maxOpenMocks`, `minDurationMinutes`, `maxDurationMinutes`.
+- Trạng thái phiên thêm `deadlineUtc` (null với practice), `serverNow`, `durationMinutes`; mọi thời điểm trả về có hậu tố `Z`.
+- Hết giờ: request tới trước `DeadlineUtc + 5 giây` vẫn được nhận (ân hạn). Từ đó phiên được chốt bằng **nháp đã lưu**, `FinishedAtUtc = DeadlineUtc` — lười ở mọi request của phiên (GET, lưu, nộp, review, retry, bỏ phiên, tạo phiên mới) và bởi worker `ExpiredPracticeFinalizerService` (30 giây/lần). `PUT answers` sau hạn → 409 `PRACTICE_EXPIRED`; `finish` sau hạn → trả kết quả đã chốt; `DELETE` sau hạn → 409 `PRACTICE_FINISHED` (phiên được giữ làm lịch sử). Nộp trong ân hạn ghi `FinishedAtUtc` = hạn nộp.
+- `POST {id}/questions/{qid}/check` trên mock → 409 `PRACTICE_CHECK_NOT_ALLOWED`. `POST {id}/retry` từ mock đã nộp → mock mới cùng thời lượng.
+- `GET mine`: `items[].kind`, `deadlineUtc`; mock quá hạn chưa kịp chốt hiện `state = "expired"`.

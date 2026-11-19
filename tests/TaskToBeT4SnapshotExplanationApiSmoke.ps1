@@ -146,6 +146,6 @@ finally {
       DELETE dbo.ExamDetails WHERE ExamId=$exam; DELETE dbo.Exams WHERE Id=$exam;
       DELETE dbo.ClassUsers WHERE ClassId=$class; DELETE dbo.Classes WHERE Id=$class;" | Out-Null }
     if ($student -eq [Guid]::Empty) { $found = Sql "SELECT TOP 1 Id FROM dbo.Users WHERE Email=N'$email';"; if ($found) { $student = [Guid]$found } }
-    if ($student -ne [Guid]::Empty) { Sql "DELETE dbo.ReviewFlags WHERE UserId='$student'; DELETE dbo.RefreshTokens WHERE UserId='$student'; DELETE dbo.EmailVerificationTokens WHERE UserId='$student'; DELETE dbo.Users WHERE Id='$student';" | Out-Null }
+    if ($student -ne [Guid]::Empty) { Sql "DELETE dbo.ReviewFlags WHERE UserId='$student'; DELETE dbo.PracticeSessions WHERE UserId='$student'; DELETE dbo.RefreshTokens WHERE UserId='$student'; DELETE dbo.EmailVerificationTokens WHERE UserId='$student'; DELETE dbo.Users WHERE Id='$student';" | Out-Null }
     if ($mail) { Remove-Item -LiteralPath $mail.FullName -ErrorAction SilentlyContinue }
 }

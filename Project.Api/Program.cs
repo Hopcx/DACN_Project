@@ -67,12 +67,15 @@ namespace Project.Api
                 builder.Services.AddScoped<AttemptFinalizer>();
                 builder.Services.AddScoped<AuditWriter>();
                 builder.Services.AddScoped<BestEffortAudit>();
+                builder.Services.AddScoped<PracticeFinalizer>();
                 builder.Services.AddScoped<ChapterStore>();
                 builder.Services.AddScoped<TagStore>();
                 builder.Services.AddScoped<Project.Application.Interfaces.Services.IExamVariantService, Project.Api.Services.ExamVariantStore>();
                 builder.Services.AddSingleton<IVerificationEmailSender, VerificationEmailSender>();
                 builder.Services.AddHostedService<ExpiredAccessTokenCleanupService>();
                 builder.Services.AddHostedService<ExpiredAttemptFinalizerService>();
+                // To-be T9: chốt Thi thử quá hạn
+                builder.Services.AddHostedService<ExpiredPracticeFinalizerService>();
                 // Health: live = tiến trình chạy; ready = kết nối được SQL Server (G7)
                 builder.Services.AddHealthChecks()
                     .AddCheck<Project.Api.HealthChecks.DatabaseHealthCheck>("db", tags: new[] { "ready" });

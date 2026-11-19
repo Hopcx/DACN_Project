@@ -48,6 +48,7 @@ services.AddScoped<AuditWriter>();
 services.AddScoped<BestEffortAudit>();
 services.AddScoped<ChapterStore>();
 services.AddScoped<TagStore>();
+services.AddScoped<PracticeFinalizer>();
 services.AddHttpContextAccessor();
 
 using var provider = services.BuildServiceProvider(validateScopes: true);

@@ -17,19 +17,35 @@ public static class PracticeSnapshotFactory
     public const string PracticeName = "Luyện tập";
     public const string PracticeCode = "PRACTICE";
     public static readonly string[] RevealModes = ["end", "perQuestion"];
+    // To-be T9: Thi thử (Kind "mock") — có giới hạn giờ, chỉ hiện đáp án sau khi nộp, tối đa 1 phiên đang làm
+    public const string KindPractice = "practice";
+    public const string KindMock = "mock";
+    public const int MinDurationMinutes = 5;
+    public const int MaxDurationMinutes = 180;
+    public const int MaxOpenMocks = 1;
 
     public sealed record Criteria(int SubjectId, IReadOnlyList<int> ChapterIds, IReadOnlyList<int> QuestionLevelIds,
-        IReadOnlyList<int> TagIds, int QuestionCount, string RevealMode);
+        IReadOnlyList<int> TagIds, int QuestionCount, string RevealMode, string Kind = KindPractice, int? DurationMinutes = null);
 
     /// <summary>Chuẩn hóa và kiểm tiêu chí; trả lỗi tiếng Việt hoặc null. Danh sách được bỏ trùng và sắp tăng.</summary>
     public static (Criteria? Value, string? Error) Normalize(int subjectId, IEnumerable<int>? chapterIds,
-        IEnumerable<int>? questionLevelIds, IEnumerable<int>? tagIds, int questionCount, string? revealMode)
+        IEnumerable<int>? questionLevelIds, IEnumerable<int>? tagIds, int questionCount, string? revealMode,
+        string? kind = null, int? durationMinutes = null)
     {
+        var sessionKind = (kind ?? KindPractice).Trim().ToLowerInvariant();
+        if (sessionKind is not (KindPractice or KindMock)) return (null, "Loại phiên chỉ nhận 'practice' hoặc 'mock'.");
         if (subjectId <= 0) return (null, "Môn học không hợp lệ.");
         if (questionCount is < MinQuestions or > MaxQuestions)
             return (null, $"Số câu phải từ {MinQuestions} đến {MaxQuestions}.");
         var mode = (revealMode ?? "end").Trim();
         if (!RevealModes.Contains(mode)) return (null, "Chế độ hiện đáp án chỉ nhận 'end' hoặc 'perQuestion'.");
+        if (sessionKind == KindMock)
+        {
+            if (mode != "end") return (null, "Thi thử chỉ hiện đáp án sau khi nộp bài.");
+            if (durationMinutes is not (>= MinDurationMinutes and <= MaxDurationMinutes))
+                return (null, $"Thời lượng thi thử phải từ {MinDurationMinutes} đến {MaxDurationMinutes} phút.");
+        }
+        else durationMinutes = null;
         var lists = new List<IReadOnlyList<int>>();
         foreach (var raw in new[] { chapterIds, questionLevelIds, tagIds })
         {
@@ -38,7 +54,7 @@ public static class PracticeSnapshotFactory
             if (ids.Length > MaxFilterIds) return (null, $"Mỗi bộ lọc tối đa {MaxFilterIds} mục.");
             lists.Add(Array.AsReadOnly(ids));
         }
-        return (new Criteria(subjectId, lists[0], lists[1], lists[2], questionCount, mode), null);
+        return (new Criteria(subjectId, lists[0], lists[1], lists[2], questionCount, mode, sessionKind, durationMinutes), null);
     }
 
     /// <summary>Câu dùng được cho luyện tập: cùng môn, hoạt động, loại 1–3, tập đáp án hợp lệ.</summary>
