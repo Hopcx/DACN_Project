@@ -56,7 +56,10 @@ COMMIT;
     finally { Pop-Location; Remove-Item Env:DACN_QA_EMAIL, Env:DACN_QA_PASSWORD, Env:DACN_QA_TAG, Env:DACN_QA_SUBJECT_NAME, Env:DACN_QA_DATABASE -ErrorAction SilentlyContinue }
     # Hậu kiểm: 3 phiên (2 đã nộp 2/2 và 1/2, 1 phiên làm lại đang làm)
     $summary = Sql "SELECT STRING_AGG(CONCAT(State,':',RevealMode,':',ISNULL(CAST(CorrectCount AS varchar(5)),'-')),',') WITHIN GROUP (ORDER BY CreatedAtUtc) FROM dbo.PracticeSessions WHERE UserId='$student';"
-    if ($summary -ne 'finished:end:2,finished:perQuestion:1,inProgress:perQuestion:-') { throw "SQL hậu kiểm lệch: $summary" }
+    if ($summary -ne 'finished:end:2,finished:perQuestion:1,inProgress:perQuestion:-,finished:end:1') { throw "SQL hậu kiểm lệch: $summary" }
+    # To-be T9: phiên thứ 4 là Thi thử, tự nộp khi hết giờ (FinishedAtUtc = DeadlineUtc)
+    $mock = Sql "SELECT CONCAT(COUNT(*),':',SUM(CASE WHEN FinishedAtUtc=DeadlineUtc THEN 1 ELSE 0 END)) FROM dbo.PracticeSessions WHERE UserId='$student' AND Kind='mock';"
+    if ($mock -ne '1:1') { throw "Thi thử hậu kiểm lệch: $mock" }
     # To-be T8: 2 câu được đánh dấu (1 ở phiên Cuối phiên sau ca bấm nhanh, 1 ở phiên Từng câu)
     $flags = Sql "SELECT COUNT(*) FROM dbo.ReviewFlags WHERE UserId='$student' AND SourceKind='practice';"
     if ($flags -ne '2') { throw "ReviewFlags lệch: $flags" }

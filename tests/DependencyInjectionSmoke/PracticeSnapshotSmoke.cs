@@ -92,6 +92,30 @@ internal static class PracticeSnapshotSmoke
         catch (PracticeQuestionLockedException) { locked = true; }
         Check(locked, "Changing a checked question must be rejected.");
         Console.WriteLine("PRACTICE_CHECK_APPLY_RESULT_MERGE_LOCK=PASS (isolated; no SQL/API)");
+
+        // To-be T9: Thi thử — tiêu chí, thời lượng, hạn nộp, ân hạn 5 giây, chốt theo nháp đã lưu
+        var mock = PracticeSnapshotFactory.Normalize(3, null, null, null, 10, null, " MOCK ", 15).Value!;
+        Check(mock.Kind == "mock" && mock.DurationMinutes == 15 && mock.RevealMode == "end", "Mock criteria normalized.");
+        Check(PracticeSnapshotFactory.Normalize(3, null, null, null, 10, "end", "practice", 30).Value!.DurationMinutes == null,
+            "Practice ignores duration.");
+        foreach (var bad in new[]
+        {
+            PracticeSnapshotFactory.Normalize(3, null, null, null, 10, "perQuestion", "mock", 15),
+            PracticeSnapshotFactory.Normalize(3, null, null, null, 10, null, "mock", null),
+            PracticeSnapshotFactory.Normalize(3, null, null, null, 10, null, "mock", 4),
+            PracticeSnapshotFactory.Normalize(3, null, null, null, 10, null, "mock", 181),
+            PracticeSnapshotFactory.Normalize(3, null, null, null, 10, null, "exam", 15),
+        }) Check(bad.Value == null && bad.Error != null, "Invalid mock criteria accepted.");
+        var created = new DateTime(2026, 11, 19, 1, 0, 0, DateTimeKind.Utc);
+        var due = PracticeTiming.Deadline(created, 15);
+        Check(due == created.AddMinutes(15), "Deadline = created + duration.");
+        Check(!PracticeTiming.IsExpired(due, due.AddSeconds(4.9)) && PracticeTiming.IsExpired(due, due.AddSeconds(5)) &&
+            !PracticeTiming.IsExpired(null, due.AddYears(1)), "5-second grace; practice never expires.");
+        Check(PracticeTiming.FinishedAt(due, due.AddSeconds(3)) == due && PracticeTiming.FinishedAt(due, due.AddSeconds(-3)) == due.AddSeconds(-3) &&
+            PracticeTiming.FinishedAt(null, due) == due, "Finished time capped at the deadline.");
+        Check(PracticeTiming.SuggestedMinutes(10) == 15 && PracticeTiming.SuggestedMinutes(1) == 5 && PracticeTiming.SuggestedMinutes(7) == 15 &&
+            PracticeTiming.SuggestedMinutes(50) == 75, "Suggested duration 1.5 min/question rounded up to 5.");
+        Console.WriteLine("MOCK_CRITERIA_DEADLINE_GRACE_SUGGESTED=PASS (isolated; no SQL/API)");
     }
 
     // Loại 2: 3 đáp án, đáp án Id*10 đúng; loại 3: 3 đáp án, hai đáp án đúng.
