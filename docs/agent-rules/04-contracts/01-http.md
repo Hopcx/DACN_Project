@@ -143,3 +143,14 @@ Migration `ToBeT6PracticeChecked` thêm cột `PracticeSessions.CheckedJson` nva
 - Trạng thái phiên (POST, `GET {id}`, retry) thêm `checked[]` cùng cấu trúc `result` — chỉ các câu đã chốt; câu chưa chốt vẫn không có đáp án/lời giải.
 - `PUT {id}/answers`: câu đã chốt bị bỏ qua trong payload → giữ lựa chọn cũ; gửi lựa chọn khác (kể cả `[]`) → 409 `PRACTICE_QUESTION_LOCKED`. Payload sai cấu trúc (đáp án không thuộc câu, trùng câu, quá số lượng) bị kiểm trước → 400 `INVALID_SELECTION`.
 - `finish`, `review` không đổi (chấm theo nháp đã gồm lựa chọn của câu đã chốt).
+
+## To-be T8 — đánh dấu câu (ReviewFlags) tại `dev/Hop`
+
+Migration `ToBeT8ReviewFlags` thêm bảng `ReviewFlags` (`UserId`, `SourceKind` 'exam'|'practice', `SourceId`, `SnapshotQuestionId`, `CreatedAtUtc`; PK 4 cột; FK Users). Không đổi API làm bài/review hiện có.
+
+Route `/web/review-flags`, policy `Student`. Nguồn: `exam` = `ExamAttempts.Id` (chủ lượt + thành viên đã duyệt của lớp được gán lịch, như `GET /web/attempts/{id}`), `practice` = `PracticeSessions.Id` của chính học viên. Không phải chủ / không tồn tại → 404 `REVIEW_FLAG_SOURCE_NOT_FOUND`. `sourceKind` khác 'exam'/'practice' (không phân biệt hoa/thường) hoặc `sourceId` rỗng → 400. Được đánh dấu mọi lúc chủ mở được nguồn (đang làm, đã nộp/hết giờ/bị hủy, xem lại); không ảnh hưởng điểm.
+
+- `GET ?sourceKind=&sourceId=` → `{sourceKind, sourceId, questionIds[]}` (Guid câu trong snapshot, theo thứ tự câu).
+- `PUT` `{sourceKind, sourceId, questionId}` → `{..., flagged: true}`; câu không thuộc snapshot → 400 `REVIEW_FLAG_QUESTION_INVALID`; đã đánh dấu → vẫn 200.
+- `DELETE ?sourceKind=&sourceId=&questionId=` → `{..., flagged: false}`; chưa đánh dấu → vẫn 200.
+- `DELETE /web/student/practice/{id}` (bỏ phiên) xóa luôn đánh dấu của phiên trong cùng giao dịch.
