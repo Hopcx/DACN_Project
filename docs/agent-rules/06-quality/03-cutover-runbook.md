@@ -63,6 +63,9 @@ API **từ chối khởi động** nếu thiếu (FACT: `Project.Api/Program.cs`
 - Log: Serilog ghi console và file `logs/log-<ngày>.txt` (cuộn theo ngày) dưới thư mục nội dung của API (`Project.Api/Program.cs`). Kiểm lỗi start/save/submit attempt, 409 trùng lịch, lỗi SMTP.
 - Lượt thi quá hạn chưa chốt (worker `ExpiredAttemptFinalizerService` phải về 0 sau vài phút):
   `SELECT COUNT(*) FROM dbo.ExamAttempts WHERE State = N'inProgress' AND DeadlineUtc < SYSUTCDATETIME();`
+- Thi thử quá hạn chưa chốt (worker `ExpiredPracticeFinalizerService`, 30 giây/lần, ân hạn 5 giây — phải về 0 sau khoảng 1 phút):
+  `SELECT COUNT(*) FROM dbo.PracticeSessions WHERE State = N'inProgress' AND DeadlineUtc < DATEADD(second, -5, SYSUTCDATETIME());`
+- Lệnh SQL tay (sqlcmd/SSMS script) ghi vào `ExamAttempts`, `PracticeSessions` hoặc bảng có index lọc khác phải bật `SET QUOTED_IDENTIFIER ON` (sqlcmd dùng `-I`), nếu không sẽ lỗi 1934. EF/API tự bật.
 - Backup định kỳ theo chính sách được chọn và thử restore định kỳ bằng `tests/CutoverRehearsal.ps1`.
 
 ## 7. Chờ quyết định (Q1 = chưa chốt nơi chạy)

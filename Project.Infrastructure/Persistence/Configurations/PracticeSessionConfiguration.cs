@@ -25,6 +25,9 @@ public class PracticeSessionConfiguration : IEntityTypeConfiguration<PracticeSes
         entity.Property(x => x.DraftJson).HasColumnType("nvarchar(max)").IsRequired();
         entity.Property(x => x.CheckedJson).HasColumnType("nvarchar(max)").IsRequired().HasDefaultValue("[]");
         entity.HasIndex(x => new { x.UserId, x.CreatedAtUtc });
+        // Worker quét Thi thử quá hạn: index lọc chỉ chứa phiên đang làm có hạn nộp
+        entity.HasIndex(x => x.DeadlineUtc).HasDatabaseName("IX_PracticeSessions_OpenDeadline")
+            .HasFilter("[State] = 'inProgress' AND [DeadlineUtc] IS NOT NULL");
         entity.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
         entity.HasOne<Subject>().WithMany().HasForeignKey(x => x.SubjectId).OnDelete(DeleteBehavior.Restrict);
     }

@@ -74,7 +74,7 @@ Nguồn yêu cầu: `../VibeCoding/DACN_ToBe_Feature_Specification.md` (gọi t�
 
 ### 3.2 Câu hỏi cần người dùng xác nhận (không tự quyết)
 
-**QUYẾT ĐỊNH (17/11/2026):** người dùng chấp thuận toàn bộ cột "Đề xuất" của Q1–Q19 bên dưới. Các mục ghi "Chốt khi vào Phase 2/3" (Q10–Q14) và "Để Phase sau" (Q8) vẫn còn mở cho tới Phase tương ứng.
+**QUYẾT ĐỊNH (17/11/2026):** người dùng chấp thuận toàn bộ cột "Đề xuất" của Q1–Q19 bên dưới. Các mục ghi "Chốt khi vào Phase 2/3" (Q10–Q14) vẫn còn mở — phương án ở [03-phase2-3-options.md](03-phase2-3-options.md). Q8 đã chốt ngày 20/11/2026 (xem bảng).
 Đánh số theo đặc tả mục 6 (Q1–Q15), thêm Q16–Q19 phát sinh khi khảo sát. **Đề xuất** chỉ để tham khảo.
 
 | # | Câu hỏi | Ảnh hưởng | Đề xuất |
@@ -86,7 +86,7 @@ Nguồn yêu cầu: `../VibeCoding/DACN_ToBe_Feature_Specification.md` (gọi t�
 | Q5 | Hiện đáp án sau từng câu hay cuối phiên — ai cấu hình? | Practice API | Học viên chọn khi tạo phiên |
 | Q6 | Mock Exam là loại Exam riêng hay chế độ phiên làm bài? | Kiến trúc | Chế độ của phiên tự luyện (có giới hạn giờ), không phải Exam |
 | Q7 | Mock Exam có tính vào điểm lớp/xếp hạng? | Báo cáo | Không |
-| Q8 | So sánh điểm theo lớp, toàn hệ thống hay nhóm? | Thống kê | Để Phase sau (cùng F24) |
+| Q8 | So sánh điểm theo lớp, toàn hệ thống hay nhóm? | Thống kê | **ĐÃ CHỐT (20/11/2026): so sánh, xếp hạng học sinh trong cùng một lớp.** Chi tiết (điểm nào, lượt nào, ai xem) — xem [03-phase2-3-options.md](03-phase2-3-options.md) |
 | Q9 | Ai xem lời giải, khi nào? | Review | Như đáp án đúng của từng chế độ |
 | Q10 | Chấm câu điền ngắn theo quy tắc nào? Teacher duyệt? | Phase 2 | Chốt khi vào Phase 2 |
 | Q11 | Media lưu local, object storage hay dịch vụ có sẵn? | Phase 2 | Chốt khi vào Phase 2 |
