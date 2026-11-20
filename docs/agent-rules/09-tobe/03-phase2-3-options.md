@@ -1,6 +1,6 @@
 # Phase 2–3 — Q8 đã chốt và phương án cho Q10–Q14
 
-Trạng thái: **PROPOSED** (20/11/2026, đã sửa theo review độc lập). Đọc kèm [01-asis-gap-decisions.md](01-asis-gap-decisions.md) (Q1–Q19) và [02-design-plan-tests-risks.md](02-design-plan-tests-risks.md) §4.5.
+Trạng thái: **TOÀN BỘ ĐÃ CHỐT (20/11/2026)**: Q8, Q10a, Q11a, Q12, Q13a, Q14 theo phương án (a); các câu con Q8a–f, Q10b, Q11b, Q11c, Q13b, Q13c, Q13d theo **phương án đề xuất** ghi trong từng mục (Q8a: phương án chính — lịch không làm tính 0; Q10b: (a); Q11b: (a); Q13c: (a)). Đọc kèm [01-asis-gap-decisions.md](01-asis-gap-decisions.md) (Q1–Q19) và [02-design-plan-tests-risks.md](02-design-plan-tests-risks.md) §4.5.
 Mỗi câu có 2–3 phương án; **(Đề xuất)** là phương án mình khuyên dùng, cân nhắc quy mô đồ án (1 máy chủ, SQL Server, dữ liệu nhỏ), độ an toàn và chi phí làm. Người dùng chọn trước khi lập kế hoạch slice.
 
 Bối cảnh đã có (kiểm trong code):
@@ -15,7 +15,7 @@ Bối cảnh đã có (kiểm trong code):
 
 ## Q8 — So sánh, xếp hạng (ĐÃ CHỐT: trong cùng một lớp)
 
-Phạm vi: xếp hạng học sinh **trong một lớp** (không toàn hệ thống, không nhóm tự do). Chi tiết cần chốt khi làm slice:
+Phạm vi: xếp hạng học sinh **trong một lớp** (không toàn hệ thống, không nhóm tự do). Q8a–f **ĐÃ CHỐT (20/11/2026) theo cột Đề xuất** (Q8a: phương án chính, lịch không làm tính 0):
 
 | # | Câu hỏi con | Phương án | Đề xuất |
 |---|---|---|---|
@@ -30,7 +30,7 @@ Phạm vi: xếp hạng học sinh **trong một lớp** (không toàn hệ th�
 
 ## Q10 — Chấm câu điền ngắn và các loại câu mới (Phase 2)
 
-**Q10a — Điền ngắn:**
+**Q10a — Điền ngắn:** ĐÃ CHỐT (20/11/2026): phương án (a).
 
 | Phương án | Mô tả | Ưu | Nhược |
 |---|---|---|---|
@@ -38,7 +38,7 @@ Phạm vi: xếp hạng học sinh **trong một lớp** (không toàn hệ th�
 | (b) Tự động + giảng viên duyệt lại | Thêm hàng chờ để giảng viên sửa đúng/sai, tính lại điểm | Công bằng hơn | Đổi điểm đã công bố, ảnh hưởng xếp hạng, cần audit/thông báo |
 | (c) So gần đúng (Levenshtein/regex) | Chấp nhận sai chính tả nhẹ | Bớt chấm oan | Khó đoán, dễ chấm đúng nhầm |
 
-**Q10b — Cách chấm cho các loại câu mới** (Q3 chỉ chốt cho loại hiện có — đây là quyết định mới):
+**Q10b — Cách chấm cho các loại câu mới** (Q3 chỉ chốt cho loại hiện có — đây là quyết định mới). ĐÃ CHỐT (20/11/2026): (a).
 
 | Phương án | Mô tả | Đề xuất |
 |---|---|---|
@@ -51,7 +51,7 @@ Phạm vi: xếp hạng học sinh **trong một lớp** (không toàn hệ th�
 
 ## Q11 — Lưu và phục vụ media (ảnh, âm thanh) (Phase 2)
 
-**Q11a — Nơi lưu:**
+**Q11a — Nơi lưu:** ĐÃ CHỐT (20/11/2026): phương án (a).
 
 | Phương án | Mô tả | Ưu | Nhược |
 |---|---|---|---|
@@ -59,7 +59,7 @@ Phạm vi: xếp hạng học sinh **trong một lớp** (không toàn hệ th�
 | (b) Trong SQL Server (`varbinary(max)`) | File nằm trong DB | Một bản backup đủ, diễn tập cutover hiện có tự bao gồm | DB phình nhanh với audio, backup/restore chậm |
 | (c) Object storage (Blob/S3/MinIO) | Dịch vụ ngoài, URL ký tạm | Mở rộng tốt | Cần hạ tầng, khóa truy cập; thừa cho đồ án |
 
-**Q11b — Cách trình duyệt tải media có kiểm quyền** (vì `<img>`/`<audio>` không gửi được header Bearer):
+**Q11b — Cách trình duyệt tải media có kiểm quyền** (vì `<img>`/`<audio>` không gửi được header Bearer). ĐÃ CHỐT (20/11/2026): (a).
 
 | Phương án | Mô tả | Đề xuất |
 |---|---|---|
@@ -69,13 +69,13 @@ Phạm vi: xếp hạng học sinh **trong một lớp** (không toàn hệ th�
 
 **Quy tắc chung**: kiểm **magic bytes**, không tin đuôi/MIME client; `Content-Type` lấy theo loại đã phát hiện; header `X-Content-Type-Options: nosniff`, `Cache-Control: private, no-store`, `Content-Disposition: inline`; chỉ người có quyền câu hỏi (2) tải lên; học viên chỉ tải media của câu nằm trong lượt/phiên của mình (kiểm bằng bảng liên kết, xem Q11c).
 
-**Q11c — Liên kết và xóa media** (giữ Q15: chưa xóa tự động):
+**Q11c — Liên kết và xóa media** (giữ Q15: chưa xóa tự động). ĐÃ CHỐT (20/11/2026):
 - Snapshot **v3** thêm `mediaIds` cho từng câu (và nhóm), kèm bảng `MediaReferences (MediaId, SourceKind, SourceId)` ghi khi chụp snapshot → kiểm quyền và đếm tham chiếu bằng SQL, không quét JSON.
 - Media không còn câu nào dùng **không bị xóa tự động** (Q15); Admin có trang/endpoint liệt kê media mồ côi để xóa tay. Media còn tham chiếu từ snapshot không xóa được.
 
 ---
 
-## Q12 — Giới hạn định dạng, dung lượng, thời lượng (Phase 2)
+## Q12 — Giới hạn định dạng, dung lượng, thời lượng (Phase 2) — ĐÃ CHỐT (20/11/2026): (a)
 
 | Phương án | Ảnh | Âm thanh | Ghi chú |
 |---|---|---|---|
@@ -92,7 +92,7 @@ Lưu ý kỹ thuật:
 
 ## Q13 — Định nghĩa "yếu", "top", "bottom" (Phase 3)
 
-**Q13a — Phân tích riêng của học viên (3.7)** — theo chương/tag, chỉ học viên đó xem:
+**Q13a — Phân tích riêng của học viên (3.7)** — theo chương/tag, chỉ học viên đó xem. ĐÃ CHỐT (20/11/2026): phương án (a).
 
 | Phương án | Mô tả | Đề xuất |
 |---|---|---|
@@ -100,20 +100,20 @@ Lưu ý kỹ thuật:
 | (b) So với trung bình lớp | Yếu khi thấp hơn trung bình lớp ≥ 15 điểm % | Cần dữ liệu lớp đủ lớn |
 | (c) Chỉ bài thi | Như (a) bỏ luyện tập/thi thử | Ít dữ liệu |
 
-**Q13b — Báo cáo lớp cho giảng viên/Admin** — **chỉ dữ liệu bài thi** (Q7):
+**Q13b — Báo cáo lớp cho giảng viên/Admin** — **chỉ dữ liệu bài thi** (Q7). ĐÃ CHỐT (20/11/2026):
 - Top/bottom: **20%** cao nhất/thấp nhất theo điểm tổng Q8a (làm tròn lên, tối thiểu 1), chỉ khi lớp có **≥ 5 học viên có điểm**; chỉ giảng viên/Admin thấy.
 - Theo chương: tỉ lệ đúng của lớp và số học viên "Yếu" — tính trên **bài thi** của lớp.
 - Câu hay sai: tỉ lệ đúng < 40% với ≥ 10 lượt trả lời; kèm đáp án nhiễu chọn nhiều nhất.
 
-**Q13c — Giảng viên có được xem dữ liệu tự luyện (Luyện tập/Thi thử) của học viên không?**
+**Q13c — Giảng viên có được xem dữ liệu tự luyện (Luyện tập/Thi thử) của học viên không?** ĐÃ CHỐT (20/11/2026): (a) Không.
 - (a) **Không** (Đề xuất): tự luyện là riêng của học viên, giảng viên chỉ thấy bài thi.
 - (b) Có, chỉ số tổng hợp (số phiên, tỉ lệ đúng), không xem từng bài.
 
-**Q13d — Lấy chương/tag của câu khi tổng hợp**: snapshot hiện không lưu chương/tag. Đề xuất snapshot **v3 lưu `chapterId`, `tagIds` cho từng câu** (đi cùng v3 của Q11c) để báo cáo đúng tại thời điểm làm bài; dữ liệu cũ (v1/v2) nối theo `SourceQuestionId` với ngân hàng hiện tại và ghi rõ "theo phân loại hiện tại".
+**Q13d — Lấy chương/tag của câu khi tổng hợp** (ĐÃ CHỐT 20/11/2026 theo đề xuất): snapshot hiện không lưu chương/tag. Đề xuất snapshot **v3 lưu `chapterId`, `tagIds` cho từng câu** (đi cùng v3 của Q11c) để báo cáo đúng tại thời điểm làm bài; dữ liệu cũ (v1/v2) nối theo `SourceQuestionId` với ngân hàng hiện tại và ghi rõ "theo phân loại hiện tại".
 
 ---
 
-## Q14 — Xuất báo cáo (Phase 3)
+## Q14 — Xuất báo cáo (Phase 3) — ĐÃ CHỐT (20/11/2026): (a) Excel .xlsx
 
 | Phương án | Mô tả | Ưu | Nhược |
 |---|---|---|---|

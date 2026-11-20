@@ -3,7 +3,9 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Project.Api.Services;
 using Project.Application.Common;
+using Project.Application.Services;
 using Project.Infrastructure.Persistence;
 
 namespace Project.Api.Controllers;
@@ -15,8 +17,39 @@ public class StudentClassController : ControllerBase
 {
     private readonly ProjectDACNDbContext _db;
     private readonly ClassMembershipStore _membership;
-    public StudentClassController(ProjectDACNDbContext db, ClassMembershipStore membership)
-    { _db = db; _membership = membership; }
+    private readonly ClassRankingQuery _ranking;
+    public StudentClassController(ProjectDACNDbContext db, ClassMembershipStore membership, ClassRankingQuery ranking)
+    { _db = db; _membership = membership; _ranking = ranking; }
+
+    // To-be T10 (Q8d): học viên chỉ thấy điểm và hạng của mình. Không trả tên/điểm/nhóm của bạn khác, không nhãn
+    // Top/Bottom. Hạng chỉ hiện khi lớp có ≥ 5 học viên có điểm. Không phải thành viên đã duyệt của lớp đang hoạt động → 404.
+    [HttpGet("{classId:int}/ranking")]
+    public async Task<IActionResult> Ranking(int classId, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)) return Unauthorized();
+        if (!await _db.ClassUsers.AnyAsync(x => x.ClassId == classId && x.UserId == userId && x.Status == 1 &&
+                x.Class.Status == 1, ct))
+            return NotFound(ApiResponse<string>.Fail("CLASS_NOT_FOUND"));
+        var data = await _ranking.LoadAsync(classId, ct);
+        if (data == null) return UnprocessableEntity(ApiResponse<string>.Fail("CLASS_TOO_LARGE"));
+        // Review T10: học viên có thể rời lớp giữa lúc kiểm quyền và lúc đọc → 404, không 500.
+        var me = data.Result.Rows.SingleOrDefault(x => x.UserId == userId);
+        if (me == null) return NotFound(ApiResponse<string>.Fail("CLASS_NOT_FOUND"));
+        var counted = data.Schedules.Where(x => x.Counted).ToList();
+        var visible = data.Result.RankingVisible;
+        return Ok(ApiResponse<object>.Ok(new
+        {
+            scope = "classExamSchedulesOnly", scale = 10, scoreMethod = "highestAttempt", absentScore = 0,
+            minScoredForRanking = ClassRanking.MinScoredForRanking, scoredCount = data.Result.ScoredCount,
+            serverNow = data.ServerNow,
+            total = me.Total, attemptedCount = me.AttemptedCount, scheduleCount = counted.Count, passedCount = me.PassedCount,
+            rank = visible ? me.Rank : null,
+            rankHiddenReason = me.Total == null ? "NO_SCORE" : visible ? null : "CLASS_TOO_SMALL",
+            schedules = counted.Select(s => new
+                { id = s.Id, title = s.Title, examName = s.ExamName, endTime = s.EndTime, score = me.Scores[s.Id] }),
+            notCountedCount = data.Schedules.Count - counted.Count
+        }));
+    }
 
     [HttpGet]
     public async Task<IActionResult> Mine()

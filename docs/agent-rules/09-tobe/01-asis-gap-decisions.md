@@ -74,7 +74,7 @@ Nguồn yêu cầu: `../VibeCoding/DACN_ToBe_Feature_Specification.md` (gọi t�
 
 ### 3.2 Câu hỏi cần người dùng xác nhận (không tự quyết)
 
-**QUYẾT ĐỊNH (17/11/2026):** người dùng chấp thuận toàn bộ cột "Đề xuất" của Q1–Q19 bên dưới. Các mục ghi "Chốt khi vào Phase 2/3" (Q10–Q14) vẫn còn mở — phương án ở [03-phase2-3-options.md](03-phase2-3-options.md). Q8 đã chốt ngày 20/11/2026 (xem bảng).
+**QUYẾT ĐỊNH (17/11/2026):** người dùng chấp thuận toàn bộ cột "Đề xuất" của Q1–Q19 bên dưới. Các mục ghi "Chốt khi vào Phase 2/3" (Q10–Q14) và Q8 đã chốt ngày 20/11/2026 (xem bảng), kèm mọi câu con theo đề xuất trong [03-phase2-3-options.md](03-phase2-3-options.md).
 Đánh số theo đặc tả mục 6 (Q1–Q15), thêm Q16–Q19 phát sinh khi khảo sát. **Đề xuất** chỉ để tham khảo.
 
 | # | Câu hỏi | Ảnh hưởng | Đề xuất |
@@ -88,11 +88,11 @@ Nguồn yêu cầu: `../VibeCoding/DACN_ToBe_Feature_Specification.md` (gọi t�
 | Q7 | Mock Exam có tính vào điểm lớp/xếp hạng? | Báo cáo | Không |
 | Q8 | So sánh điểm theo lớp, toàn hệ thống hay nhóm? | Thống kê | **ĐÃ CHỐT (20/11/2026): so sánh, xếp hạng học sinh trong cùng một lớp.** Chi tiết (điểm nào, lượt nào, ai xem) — xem [03-phase2-3-options.md](03-phase2-3-options.md) |
 | Q9 | Ai xem lời giải, khi nào? | Review | Như đáp án đúng của từng chế độ |
-| Q10 | Chấm câu điền ngắn theo quy tắc nào? Teacher duyệt? | Phase 2 | Chốt khi vào Phase 2 |
-| Q11 | Media lưu local, object storage hay dịch vụ có sẵn? | Phase 2 | Chốt khi vào Phase 2 |
-| Q12 | Giới hạn định dạng/dung lượng/thời lượng audio? | Phase 2 | Chốt khi vào Phase 2 |
-| Q13 | Định nghĩa "yếu/top/bottom"? | Phase 3 | Chốt khi vào Phase 3 |
-| Q14 | Export báo cáo định dạng và cột nào? | Phase 3 | Chốt khi vào Phase 3 |
+| Q10 | Chấm câu điền ngắn theo quy tắc nào? Teacher duyệt? | Phase 2 | **ĐÃ CHỐT (20/11/2026): chấm tự động theo danh sách đáp án chấp nhận, không duyệt lại** ([03](03-phase2-3-options.md) Q10a-(a)). Q10b: tất cả-hoặc-không cho loại mới |
+| Q11 | Media lưu local, object storage hay dịch vụ có sẵn? | Phase 2 | **ĐÃ CHỐT (20/11/2026): đĩa máy chủ ngoài wwwroot + bảng `MediaFiles`, qua `IMediaStorage`** (03 Q11a-(a)). Q11b: URL ký tạm; Q11c: snapshot v3 `mediaIds` + `MediaReferences`, không xóa tự động |
+| Q12 | Giới hạn định dạng/dung lượng/thời lượng audio? | Phase 2 | **ĐÃ CHỐT (20/11/2026): ảnh JPEG/PNG/WebP ≤ 2 MB, ≤ 4096×4096; audio MP3/M4A/OGG ≤ 10 MB; cấu hình `Media:*`** (03 Q12-(a)) |
+| Q13 | Định nghĩa "yếu/top/bottom"? | Phase 3 | **ĐÃ CHỐT (20/11/2026): ngưỡng tỉ lệ đúng (Yếu < 50%, Cần cải thiện < 70%, Khá < 85%, Tốt ≥ 85%), tối thiểu 5 câu, 90 ngày** (03 Q13a-(a)). Q13b: báo cáo lớp chỉ bài thi, top/bottom 20%; Q13c: giảng viên không xem tự luyện; Q13d: snapshot v3 lưu chương/tag |
+| Q14 | Export báo cáo định dạng và cột nào? | Phase 3 | **ĐÃ CHỐT (20/11/2026): Excel .xlsx, mở rộng bộ ghi (nhiều sheet, ô số, cột vượt Z), cột theo 03 §Q14** (03 Q14-(a)) |
 | Q15 | Thời hạn lưu bài làm, audit, media? | Lưu trữ | Chưa xóa tự động cho tới khi có chính sách |
 | Q16 | "Độ khó" dùng lại bảng `QuestionLevels` (seed 3 mức Dễ/TB/Khó) hay thêm cột mới giữ `QuestionLevels` cho mục khác? | Schema, chọn ngẫu nhiên mã đề | Dùng lại `QuestionLevels`, seed 3 mức (DB đang 0 dòng nên không xung đột) |
 | Q17 | Trạng thái câu hỏi: thêm "Nháp" riêng, hay giữ 1/0/255 (0 = nháp/tạm ngừng)? | Lọc câu cho Practice/Mock | Giữ 1/0/255; chỉ lấy câu status 1 |
