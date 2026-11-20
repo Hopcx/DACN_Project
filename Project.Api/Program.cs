@@ -68,6 +68,7 @@ namespace Project.Api
                 builder.Services.AddScoped<AuditWriter>();
                 builder.Services.AddScoped<BestEffortAudit>();
                 builder.Services.AddScoped<PracticeFinalizer>();
+                builder.Services.AddScoped<ClassRankingQuery>();
                 builder.Services.AddScoped<ChapterStore>();
                 builder.Services.AddScoped<TagStore>();
                 builder.Services.AddScoped<Project.Application.Interfaces.Services.IExamVariantService, Project.Api.Services.ExamVariantStore>();
