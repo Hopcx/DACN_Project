@@ -165,3 +165,8 @@ Không migration (dùng `PracticeSessions.Kind = 'mock'` và `DeadlineUtc` có s
 - Hết giờ: request tới trước `DeadlineUtc + 5 giây` vẫn được nhận (ân hạn). Từ đó phiên được chốt bằng **nháp đã lưu**, `FinishedAtUtc = DeadlineUtc` — lười ở mọi request của phiên (GET, lưu, nộp, review, retry, bỏ phiên, tạo phiên mới) và bởi worker `ExpiredPracticeFinalizerService` (30 giây/lần). `PUT answers` sau hạn → 409 `PRACTICE_EXPIRED`; `finish` sau hạn → trả kết quả đã chốt; `DELETE` sau hạn → 409 `PRACTICE_FINISHED` (phiên được giữ làm lịch sử). Nộp trong ân hạn ghi `FinishedAtUtc` = hạn nộp.
 - `POST {id}/questions/{qid}/check` trên mock → 409 `PRACTICE_CHECK_NOT_ALLOWED`. `POST {id}/retry` từ mock đã nộp → mock mới cùng thời lượng.
 - `GET mine`: `items[].kind`, `deadlineUtc`; mock quá hạn chưa kịp chốt hiện `state = "expired"`.
+
+## Dọn nợ sau To-be T9 tại `dev/Hop`
+
+- Migration `ToBeDebtPracticeSweepIndex`: index lọc `IX_PracticeSessions_OpenDeadline` trên `PracticeSessions(DeadlineUtc)` `WHERE [State] = 'inProgress' AND [DeadlineUtc] IS NOT NULL` (worker quét Thi thử quá hạn). Lệnh SQL ghi `PracticeSessions` ngoài EF cần `SET QUOTED_IDENTIFIER ON` (sqlcmd `-I`).
+- `GET /web/student/practice/mine` `items[]` thêm `durationSeconds` (phiên đã nộp: `FinishedAtUtc − CreatedAtUtc`, giây; đang làm: null) và `checkedCount` (số câu đã kiểm tra ở chế độ Từng câu).
