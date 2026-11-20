@@ -132,6 +132,9 @@ SELECT @s;
     $abandon = Call 'DELETE' "$base/$pid_" $token
     Expect $abandon.status 409 'abandon after check'
     Expect $abandon.body.message 'PRACTICE_HAS_CHECKED' 'has checked code'
+    # Nợ sau T9: lịch sử báo số câu đã kiểm tra để FE ẩn "Bỏ phiên"
+    $hist = @(@((Call 'GET' "$base/mine?page=1&pageSize=10" $token).body.data.items) | Where-Object { $_.id -eq $pid_ })[0]
+    Expect $hist.checkedCount 2 'history checkedCount'
 
     # finish, sau finish, review, retry
     $fin = Call 'POST' "$base/$pid_/finish" $token @{ revision = 3 }

@@ -200,6 +200,12 @@ SELECT CONCAT(@a,',',@b,',',@c1,',',@c2,',',@t,',',@class);
     Expect @($mine.body.data.items).Count 2 'page size'
     Expect $mine.body.data.items[0].id $pq.body.data.id 'newest first'
     Expect (Call 'GET' '/web/student/practice/mine?page=0' $token).status 400 'bad page'
+    # Nợ sau T9: thời gian làm bài và số câu đã kiểm tra trong lịch sử
+    $all = @((Call 'GET' '/web/student/practice/mine?page=1&pageSize=10' $token).body.data.items)
+    $doneItem = @($all | Where-Object { $_.id -eq $s1Id })[0]; $openItem = @($all | Where-Object { $_.id -eq $pq.body.data.id })[0]
+    if ($null -eq $doneItem.durationSeconds -or [long]$doneItem.durationSeconds -lt 0) { throw "durationSeconds của phiên đã nộp sai: $($doneItem.durationSeconds)" }
+    if ($null -ne $openItem.durationSeconds) { throw 'Phiên đang làm không có durationSeconds.' }
+    Expect "$($doneItem.checkedCount)|$($openItem.checkedCount)" '0|0' 'checkedCount (end mode)'
     Expect (Call 'GET' '/web/student/practice/mine' $otherToken).body.data.totalCount 0 'other history empty'
     Write-Output "TOBE_T5_PRACTICE_SMOKE=PASS;DB=$Database;TAG=$tag"
 }

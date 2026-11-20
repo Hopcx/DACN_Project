@@ -1064,6 +1064,10 @@ namespace Project.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DeadlineUtc")
+                        .HasDatabaseName("IX_PracticeSessions_OpenDeadline")
+                        .HasFilter("[State] = 'inProgress' AND [DeadlineUtc] IS NOT NULL");
+
                     b.HasIndex("SubjectId");
 
                     b.HasIndex("UserId", "CreatedAtUtc");
