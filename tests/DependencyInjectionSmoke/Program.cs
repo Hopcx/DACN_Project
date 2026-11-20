@@ -22,6 +22,7 @@ AttemptSnapshotSmoke.Run();
 AttemptScoringSmoke.Run();
 PracticeSnapshotSmoke.Run();
 ReviewFlagSmoke.Run();
+ClassRankingSmoke.Run();
 QuestionWorkbookSmoke.Run();
 QuestionExportSmoke.Run();
 AccountWorkbookSmoke.Run();
@@ -49,6 +50,7 @@ services.AddScoped<BestEffortAudit>();
 services.AddScoped<ChapterStore>();
 services.AddScoped<TagStore>();
 services.AddScoped<PracticeFinalizer>();
+services.AddScoped<ClassRankingQuery>();
 services.AddHttpContextAccessor();
 
 using var provider = services.BuildServiceProvider(validateScopes: true);
@@ -78,7 +80,7 @@ var controllerTypes = new[]
     , typeof(QuestionController), typeof(QuestionImportController), typeof(TeacherClassController),
     typeof(StudentAttemptController), typeof(AnswerController), typeof(ExamController),
     typeof(QuestionExportController), typeof(AccountExcelController), typeof(AdminAuditController),
-    typeof(TeacherOverviewController), typeof(ChapterController), typeof(TagController), typeof(PracticeController), typeof(ReviewFlagController)
+    typeof(TeacherOverviewController), typeof(ChapterController), typeof(TagController), typeof(PracticeController), typeof(ReviewFlagController), typeof(StudentClassController)
 };
 
 foreach (var controllerType in controllerTypes)

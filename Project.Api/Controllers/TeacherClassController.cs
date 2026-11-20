@@ -3,7 +3,9 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Project.Api.Services;
 using Project.Application.Common;
+using Project.Application.Services;
 using Project.Infrastructure.Persistence;
 
 namespace Project.Api.Controllers;
@@ -15,9 +17,10 @@ public class TeacherClassController : ControllerBase
 {
     private readonly ProjectDACNDbContext _db;
     private readonly ClassMembershipStore _membership;
+    private readonly ClassRankingQuery _ranking;
 
-    public TeacherClassController(ProjectDACNDbContext db, ClassMembershipStore membership)
-    { _db = db; _membership = membership; }
+    public TeacherClassController(ProjectDACNDbContext db, ClassMembershipStore membership, ClassRankingQuery ranking)
+    { _db = db; _membership = membership; _ranking = ranking; }
 
     private bool TryTeacher(out Guid teacherId) =>
         Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out teacherId);
@@ -148,6 +151,40 @@ public class TeacherClassController : ControllerBase
             r.state, r.totalMark, r.isPassed
         });
         return Ok(ApiResponse<object>.Ok(data));
+    }
+
+    // To-be T10 (Q8, Q13b): bảng xếp hạng đầy đủ của lớp — chỉ giảng viên của lớp và Admin. Chỉ điểm bài thi,
+    // không câu hỏi/đáp án. Top/Bottom chỉ khi lớp có ≥ 5 học viên có điểm.
+    [HttpGet("{classId:int}/ranking")]
+    public async Task<IActionResult> Ranking(int classId, CancellationToken ct)
+    {
+        if (!TryTeacher(out var teacherId)) return Unauthorized();
+        if (!await OwnsAsync(classId, teacherId)) return NotFound(ApiResponse<string>.Fail("Lớp không tồn tại"));
+        var data = await _ranking.LoadAsync(classId, ct);
+        if (data == null) return UnprocessableEntity(ApiResponse<string>.Fail("CLASS_TOO_LARGE"));
+        var counted = data.Schedules.Where(x => x.Counted).ToList();
+        var byUser = data.Result.Rows.ToDictionary(x => x.UserId);
+        var students = data.Members.Select(m => (m, r: byUser[m.UserId]))
+            .OrderBy(x => x.r.Rank ?? int.MaxValue).ThenBy(x => x.m.FullName).ThenBy(x => x.m.UserName)
+            .Select(x => new
+            {
+                userId = x.m.UserId, userName = x.m.UserName, fullName = x.m.FullName, email = x.m.Email,
+                rank = x.r.Rank, total = x.r.Total, attemptedCount = x.r.AttemptedCount, scheduleCount = counted.Count,
+                passedCount = x.r.PassedCount, group = x.r.Group,
+                scores = counted.Select(s => new { scheduleId = s.Id, score = x.r.Scores[s.Id] }).ToList()
+            }).ToList();
+        return Ok(ApiResponse<object>.Ok(new
+        {
+            scope = "classExamSchedulesOnly", scale = 10, scoreMethod = "highestAttempt", absentScore = 0,
+            minScoredForRanking = ClassRanking.MinScoredForRanking, scoredCount = data.Result.ScoredCount,
+            rankingVisible = data.Result.RankingVisible, skippedAttempts = data.Result.SkippedAttempts,
+            serverNow = data.ServerNow,
+            schedules = counted.Select(s => new { id = s.Id, title = s.Title, examName = s.ExamName, endTime = s.EndTime }),
+            notCounted = data.Schedules.Where(x => !x.Counted).Select(s => new
+                { id = s.Id, title = s.Title, examName = s.ExamName, endTime = s.EndTime,
+                  timeZoneStatus = s.IsTimeUtc ? "utc" : "unknown", reason = s.NotCountedReason }),
+            students
+        }));
     }
 
     // Admin (level 1) là quyền cao nhất: thao tác được trên mọi lớp, không bị giới hạn theo giảng viên phụ trách.
