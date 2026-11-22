@@ -87,7 +87,7 @@ finally {
       DELETE dbo.ClassExamSchedule WHERE ExamScheduleId IN (SELECT Id FROM dbo.ExamSchedules WHERE ExamId IN ($exams));
       DELETE dbo.ExamSchedules WHERE ExamId IN ($exams); DELETE dbo.ExamDetails WHERE ExamId IN ($exams); DELETE dbo.Exams WHERE Id IN ($exams);"
     Clean "DELETE dbo.ClassUsers WHERE ClassId IN (SELECT Id FROM dbo.Classes WHERE ClassCode=N'T10FE-$tag'); DELETE dbo.Classes WHERE ClassCode=N'T10FE-$tag';"
-    Clean "DELETE dbo.ReviewFlags WHERE UserId IN ($users); DELETE dbo.PracticeSessions WHERE UserId IN ($users);
+    Clean "DELETE dbo.Logs WHERE ActorUserId IN ($users); DELETE dbo.ReviewFlags WHERE UserId IN ($users); DELETE dbo.PracticeSessions WHERE UserId IN ($users);
       DELETE dbo.RefreshTokens WHERE UserId IN ($users); DELETE dbo.EmailVerificationTokens WHERE UserId IN ($users); DELETE dbo.Users WHERE Id IN ($users);"
     if ($mail) { Remove-Item -LiteralPath $mail.FullName -ErrorAction SilentlyContinue }
 }

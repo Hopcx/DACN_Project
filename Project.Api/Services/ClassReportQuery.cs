@@ -31,7 +31,7 @@ public sealed class ClassReportQuery
     }
 
     /// <returns>null khi lớp vượt giới hạn của <see cref="ClassRankingQuery"/>.</returns>
-    public async Task<object?> LoadAsync(int classId, CancellationToken ct = default)
+    public async Task<ClassReportView?> LoadAsync(int classId, CancellationToken ct = default)
     {
         var data = await _ranking.LoadAsync(classId, ct);
         if (data == null) return null;
@@ -70,49 +70,55 @@ public sealed class ClassReportQuery
         var names = data.Members.ToDictionary(m => m.UserId);
 
         var counted = data.Schedules.Where(s => s.Counted).ToList();
-        return new
-        {
-            scope = "classExamSchedulesOnly", attemptsCounted = "rankingAttempt", classification = "snapshotOrCurrentBank", correctAnswersFrom = "snapshot", answersIncludeBlank = true,
-            serverNow = data.ServerNow,
-            thresholds = new { _thresholds.WeakBelow, _thresholds.MinQuestions, _thresholds.HardBelow, _thresholds.HardMinAnswers,
-                maxHardQuestions = ClassReport.MaxHardQuestions },
-            scheduleCount = counted.Count, notCountedCount = data.Schedules.Count - counted.Count,
-            attemptCount = chosen.Count, attemptsWithoutOutcomes = chosen.Count - rows.Select(r => r.SourceId).Distinct().Count(),
-            studentCount = outcomes.Select(o => o.UserId).Distinct().Count(),
-            currentClassificationCount = rows.Count(r => r.ClassificationSource == "current"),
-            questionCount = report.QuestionCount, maxAnswersPerQuestion = report.MaxAnswersPerQuestion,
-            chapters = report.Chapters
+        return new ClassReportView("classExamSchedulesOnly", "rankingAttempt", "snapshotOrCurrentBank", "snapshot", true, data.ServerNow,
+            new ReportThresholdsView(_thresholds.WeakBelow, _thresholds.MinQuestions, _thresholds.HardBelow, _thresholds.HardMinAnswers,
+                ClassReport.MaxHardQuestions),
+            counted.Count, data.Schedules.Count - counted.Count, chosen.Count, chosen.Count - rows.Select(r => r.SourceId).Distinct().Count(),
+            outcomes.Select(o => o.UserId).Distinct().Count(), rows.Count(r => r.ClassificationSource == "current"),
+            report.QuestionCount, report.MaxAnswersPerQuestion,
+            report.Chapters
                 .OrderBy(c => c.ChapterId == null).ThenBy(c => c.ChapterId == null ? 0 : chapterInfo.GetValueOrDefault(c.ChapterId.Value)?.SortOrder ?? int.MaxValue)
                 .ThenBy(c => c.ChapterId == null ? "" : chapterInfo.GetValueOrDefault(c.ChapterId.Value)?.Name).ThenBy(c => c.ChapterId)
                 .Select(c =>
                 {
                     var info = c.ChapterId == null ? null : chapterInfo.GetValueOrDefault(c.ChapterId.Value);
-                    return new
-                    {
-                        chapterId = c.ChapterId,
-                        name = c.ChapterId == null ? null : info?.Name ?? $"#{c.ChapterId}",
-                        hidden = c.ChapterId != null && (info == null || info.Status != 1),
-                        total = c.Total, correct = c.Correct, rate = c.Rate, studentCount = c.StudentCount,
-                        weakCount = c.WeakStudents.Count,
-                        weakStudents = c.WeakStudents.Select(id => names.TryGetValue(id, out var m)
-                            ? new { userId = id, fullName = m.FullName, userName = m.UserName }
-                            : new { userId = id, fullName = (string)"?", userName = (string)"?" })
-                            .OrderBy(x => x.fullName).ToList()
-                    };
+                    return new ReportChapterView(c.ChapterId, c.ChapterId == null ? null : info?.Name ?? $"#{c.ChapterId}",
+                        c.ChapterId != null && (info == null || info.Status != 1), c.Total, c.Correct, c.Rate, c.StudentCount,
+                        c.WeakStudents.Count,
+                        c.WeakStudents.Select(id => names.TryGetValue(id, out var m)
+                                ? new ReportWeakStudent(id, m.FullName, m.UserName) : new ReportWeakStudent(id, "?", "?"))
+                            .OrderBy(x => x.FullName).ToList());
                 }).ToList(),
-            hardQuestions = report.HardQuestions.Select(h =>
+            report.HardQuestions.Select(h =>
             {
                 var q = questions.GetValueOrDefault(h.SourceQuestionId);
                 var chapter = h.ChapterId == null ? null : chapterInfo.GetValueOrDefault(h.ChapterId.Value);
-                return new
-                {
-                    questionId = h.SourceQuestionId, content = q == null ? "(câu đã xóa)" : Shorten(q.Content), hidden = q == null || q.Status != 1,
-                    chapterName = chapter?.Name, level = q?.Level, answers = h.Answers, correct = h.Correct, rate = h.Rate,
-                    distractor = h.DistractorAnswerId == null ? null
-                        : Shorten(distractors.GetValueOrDefault(h.DistractorAnswerId.Value) ?? "(đáp án đã xóa)"),
-                    distractorCount = h.DistractorCount
-                };
-            }).ToList()
-        };
+                return new ReportHardView(h.SourceQuestionId, q == null ? "(câu đã xóa)" : Shorten(q.Content), q == null || q.Status != 1,
+                    chapter?.Name, q?.Level, h.Answers, h.Correct, h.Rate,
+                    h.DistractorAnswerId == null ? null : Shorten(distractors.GetValueOrDefault(h.DistractorAnswerId.Value) ?? "(đáp án đã xóa)"),
+                    h.DistractorCount);
+            }).ToList())
+        { Ranking = data };
     }
+}
+
+// To-be T13: model có kiểu của báo cáo lớp — dùng chung cho JSON (endpoint analysis, giữ nguyên tên trường camelCase) và Excel.
+public sealed record ReportWeakStudent(Guid UserId, string FullName, string UserName);
+
+public sealed record ReportChapterView(int? ChapterId, string? Name, bool Hidden, int Total, int Correct, decimal? Rate, int StudentCount,
+    int WeakCount, IReadOnlyList<ReportWeakStudent> WeakStudents);
+
+public sealed record ReportHardView(int QuestionId, string Content, bool Hidden, string? ChapterName, string? Level, int Answers,
+    int Correct, decimal? Rate, string? Distractor, int DistractorCount);
+
+public sealed record ReportThresholdsView(decimal WeakBelow, int MinQuestions, decimal HardBelow, int HardMinAnswers, int MaxHardQuestions);
+
+public sealed record ClassReportView(string Scope, string AttemptsCounted, string Classification, string CorrectAnswersFrom,
+    bool AnswersIncludeBlank, DateTime ServerNow, ReportThresholdsView Thresholds, int ScheduleCount, int NotCountedCount,
+    int AttemptCount, int AttemptsWithoutOutcomes, int StudentCount, int CurrentClassificationCount, int QuestionCount,
+    int MaxAnswersPerQuestion, IReadOnlyList<ReportChapterView> Chapters, IReadOnlyList<ReportHardView> HardQuestions)
+{
+    /// <summary>Dữ liệu xếp hạng dùng để dựng báo cáo (cho Excel); không đưa vào JSON.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ClassRankingData Ranking { get; init; } = null!;
 }
