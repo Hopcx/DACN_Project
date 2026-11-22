@@ -25,6 +25,7 @@ ReviewFlagSmoke.Run();
 ClassRankingSmoke.Run();
 QuestionOutcomeSmoke.Run();
 ClassReportSmoke.Run();
+XlsxReportSmoke.Run();
 QuestionWorkbookSmoke.Run();
 QuestionExportSmoke.Run();
 AccountWorkbookSmoke.Run();

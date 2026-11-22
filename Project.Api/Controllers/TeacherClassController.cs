@@ -19,10 +19,11 @@ public class TeacherClassController : ControllerBase
     private readonly ClassMembershipStore _membership;
     private readonly ClassRankingQuery _ranking;
     private readonly ClassReportQuery _report;
+    private readonly AuditWriter _audit;
 
     public TeacherClassController(ProjectDACNDbContext db, ClassMembershipStore membership, ClassRankingQuery ranking,
-        ClassReportQuery report)
-    { _db = db; _membership = membership; _ranking = ranking; _report = report; }
+        ClassReportQuery report, AuditWriter audit)
+    { _db = db; _membership = membership; _ranking = ranking; _report = report; _audit = audit; }
 
     private bool TryTeacher(out Guid teacherId) =>
         Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out teacherId);
@@ -198,6 +199,34 @@ public class TeacherClassController : ControllerBase
         if (!await OwnsAsync(classId, teacherId)) return NotFound(ApiResponse<string>.Fail("Lớp không tồn tại"));
         var data = await _report.LoadAsync(classId, ct);
         return data == null ? UnprocessableEntity(ApiResponse<string>.Fail("CLASS_TOO_LARGE")) : Ok(ApiResponse<object>.Ok(data));
+    }
+
+    // To-be T13 (Q14): xuất báo cáo lớp ra Excel (4 sheet). Quyền như ranking/analysis. Audit trước khi trả file —
+    // ghi audit lỗi thì 500 và không có file. File chứa dữ liệu cá nhân học viên, không chứa đáp án đúng.
+    // Review T13: chặn sau khi dựng file (phòng hờ); giới hạn bộ nhớ thật là ClassRankingQuery.MaxMembers/MaxSchedules (500 × 200),
+    // ứng với file nén cỡ vài MB.
+    public const int MaxReportBytes = 10 * 1024 * 1024;
+
+    [HttpGet("{classId:int}/report.xlsx")]
+    public async Task<IActionResult> ExportReport(int classId, CancellationToken ct)
+    {
+        if (!TryTeacher(out var teacherId)) return Unauthorized();
+        if (!await OwnsAsync(classId, teacherId)) return NotFound(ApiResponse<string>.Fail("Lớp không tồn tại"));
+        var report = await _report.LoadAsync(classId, ct);
+        if (report == null) return UnprocessableEntity(ApiResponse<string>.Fail("CLASS_TOO_LARGE"));
+        var cls = await _db.Classes.AsNoTracking().Where(x => x.Id == classId)
+            .Select(x => new { x.Name, x.ClassCode, Subject = x.Subject != null ? x.Subject.Name : null }).FirstAsync(ct);
+        var exporter = await _db.Users.AsNoTracking().Where(x => x.Id == teacherId)
+            .Select(x => x.FullName + " (" + x.UserName + ")").FirstOrDefaultAsync(ct) ?? teacherId.ToString();
+        var now = DateTime.UtcNow;
+        var bytes = XlsxWriter.Write(ClassReportExport.Build(report, new ClassReportExportInfo(cls.Name, cls.ClassCode, cls.Subject, exporter, now)));
+        if (bytes.Length > MaxReportBytes) return Conflict(ApiResponse<string>.Fail("EXPORT_TOO_LARGE"));
+        var students = report.Ranking.Members.Count;
+        _audit.Add(User, "class.report.export", "Class", classId.ToString(),
+            $"Xuất báo cáo lớp {cls.ClassCode}: {students} học viên, {report.ScheduleCount} lịch được tính, " +
+            $"{report.Chapters.Count} chương, {report.HardQuestions.Count} câu hay sai");
+        await _db.SaveChangesAsync(ct);
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ClassReportExport.FileName(cls.ClassCode, now));
     }
 
     // Admin (level 1) là quyền cao nhất: thao tác được trên mọi lớp, không bị giới hạn theo giảng viên phụ trách.
