@@ -4,7 +4,8 @@ namespace Project.Application.Services;
 /// To-be T11 (Q13a): ngưỡng xếp loại theo tỉ lệ đúng (%), cấu hình ở appsettings <c>Analysis:*</c>.
 /// Yếu &lt; WeakBelow ≤ Cần cải thiện &lt; ImproveBelow ≤ Khá &lt; GoodFrom ≤ Tốt; dưới MinQuestions câu: chưa đủ dữ liệu.
 /// </summary>
-public sealed record AnalysisThresholds(decimal WeakBelow = 50, decimal ImproveBelow = 70, decimal GoodFrom = 85, int MinQuestions = 5)
+public sealed record AnalysisThresholds(decimal WeakBelow = 50, decimal ImproveBelow = 70, decimal GoodFrom = 85, int MinQuestions = 5,
+    decimal HardBelow = 40, int HardMinAnswers = 10)
 {
     /// <summary>Ném lỗi khi cấu hình sai (gọi lúc khởi động để dừng sớm).</summary>
     public AnalysisThresholds Validate()
@@ -12,6 +13,9 @@ public sealed record AnalysisThresholds(decimal WeakBelow = 50, decimal ImproveB
         if (!(WeakBelow > 0 && WeakBelow < ImproveBelow && ImproveBelow < GoodFrom && GoodFrom <= 100))
             throw new InvalidOperationException("Analysis thresholds must satisfy 0 < WeakBelow < ImproveBelow < GoodFrom <= 100.");
         if (MinQuestions is < 1 or > 1000) throw new InvalidOperationException("Analysis:MinQuestions must be 1..1000.");
+        // To-be T12: "câu hay sai" — tỉ lệ đúng < HardBelow với ≥ HardMinAnswers lượt trả lời (Q13b)
+        if (!(HardBelow > 0 && HardBelow <= 100)) throw new InvalidOperationException("Analysis:HardBelow must be in (0, 100].");
+        if (HardMinAnswers is < 1 or > 100000) throw new InvalidOperationException("Analysis:HardMinAnswers must be 1..100000.");
         return this;
     }
 }

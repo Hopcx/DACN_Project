@@ -1,7 +1,8 @@
 namespace Project.Application.Services;
 
 /// <summary>Một lượt đã chốt, chưa hủy. <see cref="MaxMark"/> = tổng điểm câu trong snapshot của lượt (QT10-2).</summary>
-public sealed record RankingAttempt(Guid UserId, int ScheduleId, decimal TotalMark, decimal MaxMark, bool IsPassed);
+public sealed record RankingAttempt(Guid UserId, int ScheduleId, decimal TotalMark, decimal MaxMark, bool IsPassed,
+    Guid AttemptId = default, DateTime SubmittedAtUtc = default);
 
 public sealed record RankingRow(Guid UserId, IReadOnlyDictionary<int, decimal?> Scores, int AttemptedCount,
     int PassedCount, decimal? Total, int? Rank, string? Group);
@@ -24,6 +25,16 @@ public static class ClassRanking
 
     public static decimal TenScale(decimal totalMark, decimal maxMark) =>
         decimal.Round(Math.Clamp(totalMark * 10m / maxMark, 0m, 10m), 2, MidpointRounding.ToEven);
+
+    /// <summary>
+    /// To-be T12 (QT12-1): lượt "được tính" của mỗi (học viên, lịch) — cùng lượt cho điểm lịch trong <see cref="Calculate"/>
+    /// (thang 10 cao nhất); hòa điểm thì lượt nộp sau, rồi Id lớn hơn (ổn định). Bỏ lượt có tổng điểm câu ≤ 0.
+    /// </summary>
+    public static IReadOnlyDictionary<(Guid UserId, int ScheduleId), Guid> ChooseAttempts(IEnumerable<RankingAttempt> attempts) =>
+        attempts.Where(a => a.MaxMark > 0m)
+            .GroupBy(a => (a.UserId, a.ScheduleId))
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(a => TenScale(a.TotalMark, a.MaxMark))
+                .ThenByDescending(a => a.SubmittedAtUtc).ThenByDescending(a => a.AttemptId).First().AttemptId);
 
     public static RankingResult Calculate(IReadOnlyList<int> scheduleIds, IReadOnlyList<Guid> memberIds,
         IEnumerable<RankingAttempt> attempts)

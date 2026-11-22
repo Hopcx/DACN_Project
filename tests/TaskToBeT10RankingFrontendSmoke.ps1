@@ -60,6 +60,11 @@ INSERT dbo.ExamAttempts(Id,UserId,ExamScheduleId,ExamId,ExamDetailId,StartedAtUt
 SELECT Id,U,@s,@e,@v,@past,DATEADD(minute,30,@past),DATEADD(minute,20,@past),N'submitted',0,@snap,N'[]',5,1 FROM @rows;
 INSERT dbo.ExamAttemptSubmissions(ExamAttemptId,SubmittedAtUtc,TimeTakenSeconds,TotalMark,IsPassed,AnswersJson)
 SELECT Id,DATEADD(minute,20,@past),60,Mark,CASE WHEN Mark>=5 THEN 1 ELSE 0 END,N'[]' FROM @rows;
+-- To-be T12: một câu (chương T10 FE chương) mỗi lượt; chỉ seed đúng (1/6 = 16,7%); 6 lượt < 10 → chưa có câu hay sai
+INSERT dbo.Chapters(SubjectId,Name,SortOrder,Status,CreatedAt) VALUES (@subject,N'T10 FE chương $tag',99,1,SYSUTCDATETIME()); DECLARE @ch int=SCOPE_IDENTITY();
+INSERT dbo.Questions(Content,CreatedDate,Status,SubjectId,QuestionTypeId,ChapterId) VALUES (N'T10 FE câu $tag',SYSUTCDATETIME(),1,@subject,2,@ch); DECLARE @qq int=SCOPE_IDENTITY();
+INSERT dbo.QuestionOutcomes(SourceKind,SourceId,SnapshotQuestionId,UserId,SubjectId,ExamScheduleId,SourceQuestionId,ChapterId,TagIdsJson,IsCorrect,IsAnswered,SelectedAnswerIdsJson,FinishedAtUtc,ClassificationSource)
+SELECT N'exam',Id,NEWID(),U,@subject,@s,@qq,@ch,N'[]',CASE WHEN U='$seed' THEN 1 ELSE 0 END,1,N'[]',DATEADD(minute,20,@past),N'snapshot' FROM @rows;
 COMMIT;
 "@ | Out-Null
     $marks = Sql "SELECT STRING_AGG(CAST(s.TotalMark AS int),',') WITHIN GROUP (ORDER BY s.TotalMark DESC) FROM dbo.ExamAttemptSubmissions s JOIN dbo.ExamAttempts a ON a.Id=s.ExamAttemptId JOIN dbo.Exams e ON e.Id=a.ExamId WHERE e.Name=N'T10 FE exam $tag';"
@@ -75,6 +80,8 @@ finally {
     function Clean([string]$query) { try { Sql $query | Out-Null } catch { Write-Warning "Dọn lỗi: $($_.Exception.Message)" } }
     $exams = "SELECT Id FROM dbo.Exams WHERE Name=N'T10 FE exam $tag'"
     $users = "SELECT Id FROM dbo.Users WHERE Email=N'$email' OR UserName LIKE N't10fe%$tag'"
+    Clean "DELETE dbo.QuestionOutcomes WHERE SourceId IN (SELECT Id FROM dbo.ExamAttempts WHERE ExamId IN ($exams));
+      DELETE dbo.Questions WHERE Content=N'T10 FE câu $tag'; DELETE dbo.Chapters WHERE Name=N'T10 FE chương $tag';"
     Clean "DELETE dbo.ExamAttemptSubmissions WHERE ExamAttemptId IN (SELECT Id FROM dbo.ExamAttempts WHERE ExamId IN ($exams));
       DELETE dbo.ExamAttempts WHERE ExamId IN ($exams);
       DELETE dbo.ClassExamSchedule WHERE ExamScheduleId IN (SELECT Id FROM dbo.ExamSchedules WHERE ExamId IN ($exams));
