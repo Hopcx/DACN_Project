@@ -11,7 +11,7 @@ public sealed record RankingSchedule(int Id, string? Title, string ExamName, Dat
 public sealed record RankingMember(Guid UserId, string UserName, string FullName, string Email);
 
 public sealed record ClassRankingData(IReadOnlyList<RankingSchedule> Schedules, IReadOnlyList<RankingMember> Members,
-    RankingResult Result, DateTime ServerNow);
+    RankingResult Result, DateTime ServerNow, IReadOnlyDictionary<(Guid UserId, int ScheduleId), Guid> ChosenAttempts);
 
 /// <summary>
 /// To-be T10: đọc dữ liệu xếp hạng một lớp (chỉ đọc, chỉ bài thi — Q7/Q8c). Giảng viên và học viên dùng cùng
@@ -67,7 +67,7 @@ public sealed class ClassRankingQuery
         // QT10-2: mẫu số = tổng point > 0 trong snapshot của chính lượt đó; JSON hỏng/không có câu → 0 (lượt bị bỏ, đếm vào skipped).
         var attempts = counted.Count == 0 || memberIds.Count == 0 ? new List<AttemptRow>()
             : await _db.Database.SqlQuery<AttemptRow>($"""
-                SELECT a.UserId, a.ExamScheduleId AS ScheduleId, s.TotalMark, s.IsPassed,
+                SELECT a.Id AS AttemptId, s.SubmittedAtUtc, a.UserId, a.ExamScheduleId AS ScheduleId, s.TotalMark, s.IsPassed,
                     CAST(CASE WHEN ISJSON(a.SnapshotJson) = 1 THEN ISNULL((SELECT SUM(q.point) FROM OPENJSON(a.SnapshotJson, '$.questions')
                         WITH (point float '$.point') q WHERE q.point > 0), 0) ELSE 0 END AS decimal(28,6)) AS MaxMark
                 FROM dbo.ExamAttempts a
@@ -76,9 +76,10 @@ public sealed class ClassRankingQuery
                   AND a.State IN (N'submitted', N'timedOut') AND s.VoidedAtUtc IS NULL
                   AND EXISTS (SELECT 1 FROM dbo.ClassUsers cu WHERE cu.ClassId = {classId} AND cu.Status = 1 AND cu.UserId = a.UserId)
                 """).ToListAsync(ct);
-        var result = ClassRanking.Calculate(counted, memberIds,
-            attempts.Select(a => new RankingAttempt(a.UserId, a.ScheduleId, a.TotalMark, a.MaxMark, a.IsPassed)));
-        return new ClassRankingData(schedules, members, result, now);
+        var ranking = attempts.Select(a => new RankingAttempt(a.UserId, a.ScheduleId, a.TotalMark, a.MaxMark, a.IsPassed,
+            a.AttemptId, DateTime.SpecifyKind(a.SubmittedAtUtc, DateTimeKind.Utc))).ToList();
+        var result = ClassRanking.Calculate(counted, memberIds, ranking);
+        return new ClassRankingData(schedules, members, result, now, ClassRanking.ChooseAttempts(ranking));
     }
 
     public static bool WithinLimits(int scheduleCount, int memberCount) =>
@@ -86,6 +87,8 @@ public sealed class ClassRankingQuery
 
     private sealed class AttemptRow
     {
+        public Guid AttemptId { get; set; }
+        public DateTime SubmittedAtUtc { get; set; }
         public Guid UserId { get; set; }
         public int ScheduleId { get; set; }
         public decimal TotalMark { get; set; }
