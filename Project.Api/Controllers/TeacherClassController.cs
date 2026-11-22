@@ -18,9 +18,11 @@ public class TeacherClassController : ControllerBase
     private readonly ProjectDACNDbContext _db;
     private readonly ClassMembershipStore _membership;
     private readonly ClassRankingQuery _ranking;
+    private readonly ClassReportQuery _report;
 
-    public TeacherClassController(ProjectDACNDbContext db, ClassMembershipStore membership, ClassRankingQuery ranking)
-    { _db = db; _membership = membership; _ranking = ranking; }
+    public TeacherClassController(ProjectDACNDbContext db, ClassMembershipStore membership, ClassRankingQuery ranking,
+        ClassReportQuery report)
+    { _db = db; _membership = membership; _ranking = ranking; _report = report; }
 
     private bool TryTeacher(out Guid teacherId) =>
         Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out teacherId);
@@ -185,6 +187,17 @@ public class TeacherClassController : ControllerBase
                   timeZoneStatus = s.IsTimeUtc ? "utc" : "unknown", reason = s.NotCountedReason }),
             students
         }));
+    }
+
+    // To-be T12 (Q13b): báo cáo lớp — theo chương (tỉ lệ đúng, học viên "Yếu") và câu hay sai (đáp án nhiễu). Chỉ bài thi,
+    // lượt được tính của xếp hạng; không trả đáp án đúng. Quyền như ranking.
+    [HttpGet("{classId:int}/analysis")]
+    public async Task<IActionResult> Analysis(int classId, CancellationToken ct)
+    {
+        if (!TryTeacher(out var teacherId)) return Unauthorized();
+        if (!await OwnsAsync(classId, teacherId)) return NotFound(ApiResponse<string>.Fail("Lớp không tồn tại"));
+        var data = await _report.LoadAsync(classId, ct);
+        return data == null ? UnprocessableEntity(ApiResponse<string>.Fail("CLASS_TOO_LARGE")) : Ok(ApiResponse<object>.Ok(data));
     }
 
     // Admin (level 1) là quyền cao nhất: thao tác được trên mọi lớp, không bị giới hạn theo giảng viên phụ trách.

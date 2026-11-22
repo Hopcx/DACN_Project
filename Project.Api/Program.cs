@@ -69,6 +69,7 @@ namespace Project.Api
                 builder.Services.AddScoped<BestEffortAudit>();
                 builder.Services.AddScoped<PracticeFinalizer>();
                 builder.Services.AddScoped<ClassRankingQuery>();
+                builder.Services.AddScoped<ClassReportQuery>();
                 // To-be T11: ngưỡng phân tích (kiểm ngay khi khởi động) + worker bù QuestionOutcomes
                 builder.Services.AddSingleton((builder.Configuration.GetSection("Analysis").Get<Project.Application.Services.AnalysisThresholds>()
                     ?? new Project.Application.Services.AnalysisThresholds()).Validate());

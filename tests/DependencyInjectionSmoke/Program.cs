@@ -24,6 +24,7 @@ PracticeSnapshotSmoke.Run();
 ReviewFlagSmoke.Run();
 ClassRankingSmoke.Run();
 QuestionOutcomeSmoke.Run();
+ClassReportSmoke.Run();
 QuestionWorkbookSmoke.Run();
 QuestionExportSmoke.Run();
 AccountWorkbookSmoke.Run();
@@ -52,6 +53,7 @@ services.AddScoped<ChapterStore>();
 services.AddScoped<TagStore>();
 services.AddScoped<PracticeFinalizer>();
 services.AddScoped<ClassRankingQuery>();
+services.AddScoped<ClassReportQuery>();
 services.AddSingleton(new Project.Application.Services.AnalysisThresholds().Validate());
 services.AddHttpContextAccessor();
 
