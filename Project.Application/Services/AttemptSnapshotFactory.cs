@@ -51,7 +51,8 @@ public static class AttemptSnapshotFactory
         new(Guid.NewGuid(), question.Id, question.QuestionTypeId, question.Content, point,
             Array.AsReadOnly(question.Answers.Where(x => x.Status == 1).OrderBy(x => x.Id).Select(answer =>
                 new AttemptOptionSnapshot(Guid.NewGuid(), answer.Id, answer.Content, answer.IsCorrect)).ToArray()),
-            string.IsNullOrWhiteSpace(question.Explanation) ? null : question.Explanation.Trim());
+            string.IsNullOrWhiteSpace(question.Explanation) ? null : question.Explanation.Trim(),
+            question.ChapterId, Array.AsReadOnly(question.QuestionTags.Select(x => x.TagId).Distinct().OrderBy(x => x).ToArray()));
 
     public static IReadOnlyList<AttemptQuestionDto> ForStudent(AttemptSnapshot snapshot) =>
         Array.AsReadOnly(snapshot.Questions.Select(question => new AttemptQuestionDto(

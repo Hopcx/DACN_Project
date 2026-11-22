@@ -8,7 +8,8 @@ namespace Project.Api.Services;
 // Sweeps on startup and every ten seconds. Waiting never holds a transaction or DB lock.
 public sealed class ExpiredAttemptFinalizerService : BackgroundService
 {
-    private const string RequiredMigration = "20261018063239_Task10TimeoutAndDuration";
+    // To-be T11: chốt bài ghi thêm QuestionOutcomes → cần migration T11 (trước đó: Task10TimeoutAndDuration)
+    private const string RequiredMigration = QuestionOutcomeBackfillService.RequiredMigration;
     private readonly IServiceScopeFactory _scopes;
     private readonly ILogger<ExpiredAttemptFinalizerService> _log;
     private bool _migrationWarningLogged;

@@ -13,7 +13,8 @@ namespace Project.Api.Services;
 public sealed class ExpiredPracticeFinalizerService : BackgroundService
 {
     // Entity PracticeSession cần cột CheckedJson (T6)
-    private const string RequiredMigration = "20261118065914_ToBeT6PracticeChecked";
+    // To-be T11: chốt phiên ghi thêm QuestionOutcomes → cần migration T11 (trước đó: ToBeT6PracticeChecked)
+    private const string RequiredMigration = QuestionOutcomeBackfillService.RequiredMigration;
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
     private readonly IServiceScopeFactory _scopes;
     private readonly ILogger<ExpiredPracticeFinalizerService> _log;

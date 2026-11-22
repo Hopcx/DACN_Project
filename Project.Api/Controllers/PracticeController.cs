@@ -76,7 +76,7 @@ public class PracticeController : ControllerBase
     // Câu dùng được theo tiêu chí (lọc ở SQL, kiểm tập đáp án trong bộ nhớ).
     private async Task<List<Question>> PoolAsync(PracticeSnapshotFactory.Criteria criteria)
     {
-        var query = _db.Questions.AsNoTracking().Include(x => x.Answers)
+        var query = _db.Questions.AsNoTracking().Include(x => x.Answers).Include(x => x.QuestionTags)
             .Where(x => x.SubjectId == criteria.SubjectId && x.Status == 1 && x.QuestionTypeId >= 1 && x.QuestionTypeId <= 3);
         if (criteria.ChapterIds.Count > 0)
             query = query.Where(x => x.ChapterId != null && criteria.ChapterIds.Contains(x.ChapterId.Value));
@@ -303,7 +303,7 @@ public class PracticeController : ControllerBase
         if (row.State == "inProgress")
         {
             if (request.Revision != row.Revision) return Deny("CONCURRENCY_CONFLICT");
-            PracticeFinalizer.Score(row, PracticeTiming.FinishedAt(row.DeadlineUtc, now));
+            await PracticeFinalizer.ScoreAsync(_db, row, PracticeTiming.FinishedAt(row.DeadlineUtc, now));
             await _db.SaveChangesAsync();
         }
         await tx.CommitAsync();
@@ -394,7 +394,7 @@ public class PracticeController : ControllerBase
         await FinalizeExpiredOfUserAsync(userId.Value);
         if (await OpenLimitAsync(userId.Value, source.Kind) is { } limited) { await tx.CommitAsync(); return limited; }
         var sourceIds = Snapshot(source).Questions.Select(x => x.SourceQuestionId).Distinct().ToList();
-        var pool = (await _db.Questions.AsNoTracking().Include(x => x.Answers).Where(x => sourceIds.Contains(x.Id))
+        var pool = (await _db.Questions.AsNoTracking().Include(x => x.Answers).Include(x => x.QuestionTags).Where(x => sourceIds.Contains(x.Id))
                 .AsSplitQuery().ToListAsync())
             .Where(x => PracticeSnapshotFactory.IsUsable(x, source.SubjectId)).ToList();
         if (pool.Count == 0) { await tx.CommitAsync(); return NotEnough(0, sourceIds.Count); }

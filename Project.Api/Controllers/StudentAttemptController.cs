@@ -186,6 +186,7 @@ public class StudentAttemptController : ControllerBase
         if (used >= schedule.Exam.NumberOfRepeat) return Deny("ATTEMPT_LIMIT_REACHED");
         var variants = await _db.ExamDetails.Where(x => x.ExamId == schedule.ExamId && x.Status == 1)
             .Include(x => x.ExamDetailQuestions).ThenInclude(x => x.Question).ThenInclude(x => x.Answers)
+            .Include(x => x.ExamDetailQuestions).ThenInclude(x => x.Question).ThenInclude(x => x.QuestionTags)
             .AsSplitQuery()
             .OrderBy(x => x.Id).ToListAsync();
         if (variants.Count == 0) return Deny("NO_PUBLISHED_VARIANT");
