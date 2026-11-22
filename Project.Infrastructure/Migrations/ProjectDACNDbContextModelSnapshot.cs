@@ -1211,6 +1211,77 @@ namespace Project.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Project.Domain.Entities.QuestionOutcome", b =>
+                {
+                    b.Property<string>("SourceKind")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("SourceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("SnapshotQuestionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("ChapterId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ClassificationSource")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int?>("ExamScheduleId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("FinishedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsAnswered")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsCorrect")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("SelectedAnswerIdsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("SourceQuestionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SubjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TagIdsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("SourceKind", "SourceId", "SnapshotQuestionId");
+
+                    b.HasIndex("ExamScheduleId")
+                        .HasDatabaseName("IX_QuestionOutcomes_Schedule");
+
+                    b.HasIndex("UserId", "SubjectId", "FinishedAtUtc")
+                        .HasDatabaseName("IX_QuestionOutcomes_User_Subject_Finished");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("UserId", "SubjectId", "FinishedAtUtc"), new[] { "SourceKind", "SourceId", "ChapterId", "TagIdsJson", "IsCorrect", "ClassificationSource" });
+
+                    b.ToTable("QuestionOutcomes", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_QuestionOutcomes_Classification", "[ClassificationSource] IN ('snapshot','current')");
+
+                            t.HasCheckConstraint("CK_QuestionOutcomes_SelectedJson", "ISJSON([SelectedAnswerIdsJson]) = 1");
+
+                            t.HasCheckConstraint("CK_QuestionOutcomes_SourceKind", "[SourceKind] IN ('exam','practice','mock')");
+
+                            t.HasCheckConstraint("CK_QuestionOutcomes_TagIdsJson", "ISJSON([TagIdsJson]) = 1");
+                        });
+                });
+
             modelBuilder.Entity("Project.Domain.Entities.QuestionTag", b =>
                 {
                     b.Property<int>("QuestionId")
@@ -1988,6 +2059,15 @@ namespace Project.Infrastructure.Migrations
                     b.Navigation("Answer");
 
                     b.Navigation("Question");
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.QuestionOutcome", b =>
+                {
+                    b.HasOne("Project.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Project.Domain.Entities.QuestionTag", b =>

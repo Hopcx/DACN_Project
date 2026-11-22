@@ -49,6 +49,9 @@ public sealed class AttemptFinalizer
             IsPassed = score.IsPassed,
             AnswersJson = row.DraftJson
         };
+        // To-be T11: kết quả từng câu cùng transaction chốt
+        var subjectId = await _db.Exams.Where(x => x.Id == row.ExamId).Select(x => x.SubjectId).FirstAsync(cancellationToken);
+        await QuestionOutcomeWriter.AddForAttemptAsync(_db, row, subjectId, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         return true;
     }

@@ -31,8 +31,8 @@ public sealed class PracticeFinalizer
             """);
     }
 
-    /// <summary>Chấm theo nháp đã lưu (tất cả-hoặc-không) và đóng phiên. Không SaveChanges.</summary>
-    public static void Score(PracticeSession row, DateTime finishedAtUtc)
+    /// <summary>Chấm theo nháp đã lưu (tất cả-hoặc-không), đóng phiên và thêm kết quả từng câu (T11). Không SaveChanges.</summary>
+    public static async Task ScoreAsync(ProjectDACNDbContext db, PracticeSession row, DateTime finishedAtUtc)
     {
         if (row.State != "inProgress") return;
         var snapshot = JsonSerializer.Deserialize<AttemptSnapshot>(row.SnapshotJson, Json)!;
@@ -41,13 +41,14 @@ public sealed class PracticeFinalizer
         row.State = "finished";
         row.FinishedAtUtc = finishedAtUtc;
         row.Revision++;
+        await QuestionOutcomeWriter.AddForPracticeAsync(db, row);
     }
 
     /// <summary>Thi thử quá hạn + ân hạn: chốt bằng nháp đã lưu, FinishedAtUtc = hạn nộp. Trả true nếu vừa chốt.</summary>
     public async Task<bool> FinalizeIfExpiredAsync(PracticeSession row, DateTime nowUtc)
     {
         if (row.State != "inProgress" || !PracticeTiming.IsExpired(row.DeadlineUtc, nowUtc)) return false;
-        Score(row, row.DeadlineUtc!.Value);
+        await ScoreAsync(_db, row, row.DeadlineUtc!.Value);
         await _db.SaveChangesAsync();
         return true;
     }
