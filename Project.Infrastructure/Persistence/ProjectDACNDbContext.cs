@@ -66,6 +66,7 @@ namespace Project.Infrastructure.Persistence
         public DbSet<QuestionTag> QuestionTags { get; set; }
         public DbSet<PracticeSession> PracticeSessions { get; set; }
         public DbSet<ReviewFlag> ReviewFlags { get; set; }
+        public DbSet<QuestionOutcome> QuestionOutcomes { get; set; }
 
         public virtual DbSet<QuestionType> QuestionTypes { get; set; }
 

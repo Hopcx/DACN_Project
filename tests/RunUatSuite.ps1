@@ -32,10 +32,12 @@ $suite = @(
     @{ Name = 'TaskToBeT8ReviewFlagsApiSmoke'; Browser = $false; Marker = 'TOBE_T8_REVIEW_FLAGS_SMOKE' },
     @{ Name = 'TaskToBeT9MockExamApiSmoke'; Browser = $false; Marker = 'TOBE_T9_MOCK_EXAM_SMOKE' },
     @{ Name = 'TaskToBeT10ClassRankingApiSmoke'; Browser = $false; Marker = 'TOBE_T10_CLASS_RANKING_SMOKE' },
+    @{ Name = 'TaskToBeT11StudentAnalysisApiSmoke'; Browser = $false; Marker = 'TOBE_T11_STUDENT_ANALYSIS_SMOKE' },
     @{ Name = 'TaskP1RoleRegressionSmoke';     Browser = $true;  Marker = 'P1_ROLE_REGRESSION_SMOKE' },
     @{ Name = 'TaskP4FrontendSmoke';           Browser = $true;  Marker = 'P4_FRONTEND_SMOKE' },
     @{ Name = 'TaskToBeT7PracticeFrontendSmoke'; Browser = $true; Marker = 'TOBE_T7_PRACTICE_FRONTEND_SMOKE' },
     @{ Name = 'TaskToBeT10RankingFrontendSmoke'; Browser = $true; Marker = 'TOBE_T10_RANKING_FRONTEND_SMOKE' },
+    @{ Name = 'TaskToBeT11AnalysisFrontendSmoke'; Browser = $true; Marker = 'TOBE_T11_ANALYSIS_FRONTEND_SMOKE' },
     @{ Name = 'TaskSessionRateLimitApiSmoke';  Browser = $false; Marker = 'SESSION_RATE_LIMIT_SMOKE' }
 )
 if ($Only.Count -gt 0) { $suite = @($suite | Where-Object { $Only -contains $_.Name }) }
