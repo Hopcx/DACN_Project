@@ -55,12 +55,22 @@ public sealed class MediaController : ControllerBase
 
         // QT14-2: trùng nội dung → dùng lại bản đã có. Review T14: bản đã tắt thì bật lại; file vật lý mất thì ghi lại;
         // không trả tên gốc của người tải trước (originalName = tên file của lần tải này).
-        var existing = await _db.MediaFiles.FirstOrDefaultAsync(x => x.Sha256 == sha, ct);
-        if (existing != null)
+        // Review T15: khóa dòng theo SHA (Admin xóa mồ côi cũng khóa dòng này) và làm mới UploadedAtUtc → bản dùng lại được
+        // luật "chưa đủ 24 giờ" bảo vệ cho tới khi giáo viên gắn vào câu; Admin xóa trước thì không thấy dòng → tạo bản mới.
+        await using (var tx = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, ct))
         {
-            if (_storage.PhysicalPath(existing.Id) == null) await _storage.SaveAsync(existing.Id, bytes, ct);
-            if (existing.Status != 1) { existing.Status = 1; await _db.SaveChangesAsync(ct); }
-            return Ok(ApiResponse<object>.Ok(View(existing, true, userId, SafeName(file.FileName))));
+            var existing = await _db.MediaFiles.FromSqlInterpolated($"SELECT * FROM dbo.MediaFiles WITH (UPDLOCK, HOLDLOCK) WHERE Sha256 = {sha}")
+                .FirstOrDefaultAsync(ct);
+            if (existing != null)
+            {
+                if (_storage.PhysicalPath(existing.Id) == null) await _storage.SaveAsync(existing.Id, bytes, ct);
+                existing.Status = 1;
+                existing.UploadedAtUtc = DateTime.UtcNow;
+                await _db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+                return Ok(ApiResponse<object>.Ok(View(existing, true, userId, SafeName(file.FileName))));
+            }
+            await tx.CommitAsync(ct);
         }
         var row = new MediaFile
         {
@@ -75,8 +85,8 @@ public sealed class MediaController : ControllerBase
         {
             // Tải song song cùng nội dung: bản kia thắng; file vừa ghi là mồ côi (Q15: không xóa tự động, Admin dọn ở T15)
             _db.ChangeTracker.Clear();
-            existing = await _db.MediaFiles.AsNoTracking().FirstAsync(x => x.Sha256 == sha, ct);
-            return Ok(ApiResponse<object>.Ok(View(existing, true, userId)));
+            var winner = await _db.MediaFiles.AsNoTracking().FirstAsync(x => x.Sha256 == sha, ct);
+            return Ok(ApiResponse<object>.Ok(View(winner, true, userId)));
         }
         return Created($"/web/media/{row.Id}", ApiResponse<object>.Ok(View(row, false, userId)));
     }

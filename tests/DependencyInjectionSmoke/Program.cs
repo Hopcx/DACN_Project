@@ -89,7 +89,7 @@ var controllerTypes = new[]
     typeof(StudentAttemptController), typeof(AnswerController), typeof(ExamController),
     typeof(QuestionExportController), typeof(AccountExcelController), typeof(AdminAuditController),
     typeof(TeacherOverviewController), typeof(ChapterController), typeof(TagController), typeof(PracticeController), typeof(ReviewFlagController), typeof(StudentClassController), typeof(StudentAnalysisController),
-    typeof(MediaController), typeof(QuestionMediaController)
+    typeof(MediaController), typeof(QuestionMediaController), typeof(AdminMediaController)
 };
 
 foreach (var controllerType in controllerTypes)

@@ -1012,6 +1012,32 @@ namespace Project.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Project.Domain.Entities.MediaReference", b =>
+                {
+                    b.Property<Guid>("MediaId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SourceKind")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("SourceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("MediaId", "SourceKind", "SourceId");
+
+                    b.HasIndex("SourceKind", "SourceId")
+                        .HasDatabaseName("IX_MediaReferences_Source");
+
+                    b.ToTable("MediaReferences", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MediaReferences_SourceKind", "[SourceKind] IN ('exam','practice')");
+                        });
+                });
+
             modelBuilder.Entity("Project.Domain.Entities.Permission", b =>
                 {
                     b.Property<int>("Id")
@@ -2093,6 +2119,15 @@ namespace Project.Infrastructure.Migrations
                     b.HasOne("Project.Domain.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("UploadedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.MediaReference", b =>
+                {
+                    b.HasOne("Project.Domain.Entities.MediaFile", null)
+                        .WithMany()
+                        .HasForeignKey("MediaId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

@@ -93,7 +93,7 @@ SELECT CONCAT(@exam,',',@class,',',@schedule);
     $get = Call 'GET' "/web/attempts/$attempt1" $token
     Expect $get.status 200 'get attempt'
     NoLeak $get 'get attempt'
-    Expect (Sql "SELECT JSON_VALUE(SnapshotJson,'$.version') FROM dbo.ExamAttempts WHERE Id='$attempt1';") '3' 'snapshot version in DB (T11: v3)'
+    Expect (Sql "SELECT JSON_VALUE(SnapshotJson,'$.version') FROM dbo.ExamAttempts WHERE Id='$attempt1';") '4' 'snapshot version in DB (T15: v4)'
     # Sửa ngân hàng sau khi bắt đầu: snapshot không đổi
     Sql "UPDATE dbo.Questions SET Explanation=N'Đã sửa sau khi thi $tag' WHERE Content=N'Câu T4 số 1 ($tag)';" | Out-Null
     $submit = Call 'POST' "/web/attempts/$attempt1/submit" $token @{ revision = $start.body.data.revision }
@@ -116,7 +116,7 @@ SELECT CONCAT(@exam,',',@class,',',@schedule);
 
     $review = Call 'GET' "/web/attempts/$attempt1/review" $token
     Expect $review.status 200 'review v2'
-    Expect $review.body.data.snapshotVersion 3 'snapshotVersion v3'
+    Expect $review.body.data.snapshotVersion 4 'snapshotVersion v4'
     $q1 = @($review.body.data.questions | Where-Object { $_.content -eq "Câu T4 số 1 ($tag)" })[0]
     $q2 = @($review.body.data.questions | Where-Object { $_.content -eq "Câu T4 số 2 ($tag)" })[0]
     Expect $q1.explanation "EXPL-$tag lời giải`nDòng 2" 'explanation trimmed, kept newline, not changed by later edit'

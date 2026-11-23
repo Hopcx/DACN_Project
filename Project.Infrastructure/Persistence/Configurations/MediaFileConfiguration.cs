@@ -37,3 +37,16 @@ public class QuestionMediaConfiguration : IEntityTypeConfiguration<QuestionMedia
         entity.HasIndex(x => x.MediaId).HasDatabaseName("IX_QuestionMedia_Media");
     }
 }
+
+// To-be T15: tham chiếu media từ snapshot. FK tới MediaFiles là Restrict — media còn được tham chiếu thì không xóa được.
+public class MediaReferenceConfiguration : IEntityTypeConfiguration<MediaReference>
+{
+    public void Configure(EntityTypeBuilder<MediaReference> entity)
+    {
+        entity.ToTable("MediaReferences", t => t.HasCheckConstraint("CK_MediaReferences_SourceKind", "[SourceKind] IN ('exam','practice')"));
+        entity.HasKey(x => new { x.MediaId, x.SourceKind, x.SourceId });
+        entity.Property(x => x.SourceKind).HasMaxLength(20).IsRequired();
+        entity.HasIndex(x => new { x.SourceKind, x.SourceId }).HasDatabaseName("IX_MediaReferences_Source");
+        entity.HasOne<MediaFile>().WithMany().HasForeignKey(x => x.MediaId).OnDelete(DeleteBehavior.Restrict);
+    }
+}

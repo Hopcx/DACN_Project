@@ -23,8 +23,9 @@ public class StudentAttemptController : ControllerBase
     private readonly ScheduleWriteGuard _guard;
     private readonly AttemptFinalizer _finalizer;
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    public StudentAttemptController(ProjectDACNDbContext db, ScheduleWriteGuard guard, AttemptFinalizer finalizer)
-    { _db = db; _guard = guard; _finalizer = finalizer; }
+    private readonly MediaSettings _media;
+    public StudentAttemptController(ProjectDACNDbContext db, ScheduleWriteGuard guard, AttemptFinalizer finalizer, MediaSettings media)
+    { _db = db; _guard = guard; _finalizer = finalizer; _media = media; }
 
     private Guid? Actor() => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
     private static DateTime Utc(DateTime value) => DateTime.SpecifyKind(value, DateTimeKind.Utc);
@@ -42,7 +43,8 @@ public class StudentAttemptController : ControllerBase
             attemptId = row.Id, scheduleId = row.ExamScheduleId, state = voided ? "voided" : row.State,
             examName = Snapshot(row).ExamName,
             serverNow = now, deadline = Utc(row.DeadlineUtc), revision = row.Revision,
-            questions = finished ? Array.Empty<AttemptQuestionDto>() : AttemptSnapshotFactory.ForStudent(Snapshot(row)),
+            // To-be T15: media kèm URL ký cho chính học viên, chỉ khi còn đang làm (QT15-2)
+            questions = finished ? Array.Empty<AttemptQuestionDto>() : AttemptSnapshotFactory.ForStudent(Snapshot(row), MediaUrlFactory.For(_media, row.UserId)),
             savedAnswers = finished ? Array.Empty<AttemptAnswerDto>() : Draft(row),
             result = finished && !voided && row.AllowViewResult && result != null
                 ? new { totalMark = result.TotalMark, isPassed = result.IsPassed,
@@ -142,7 +144,9 @@ public class StudentAttemptController : ControllerBase
                 id = option.Id, content = option.Content, isCorrect = option.IsCorrect
             }).ToList(),
             // To-be T4: lời giải mở cùng điều kiện với đáp án đúng; snapshot v1 không có → null
-            explanation = question.Explanation
+            explanation = question.Explanation,
+            // To-be T15: media của câu, cùng điều kiện mở review
+            media = AttemptSnapshotFactory.MediaFor(question, MediaUrlFactory.For(_media, row.UserId))
         }).ToList();
         return Ok(ApiResponse<object>.Ok(new {
             attemptId = row.Id, state = row.State, reviewedFrom = "attemptSnapshot", snapshotVersion = snapshot.Version,
@@ -187,6 +191,7 @@ public class StudentAttemptController : ControllerBase
         var variants = await _db.ExamDetails.Where(x => x.ExamId == schedule.ExamId && x.Status == 1)
             .Include(x => x.ExamDetailQuestions).ThenInclude(x => x.Question).ThenInclude(x => x.Answers)
             .Include(x => x.ExamDetailQuestions).ThenInclude(x => x.Question).ThenInclude(x => x.QuestionTags)
+            .Include(x => x.ExamDetailQuestions).ThenInclude(x => x.Question).ThenInclude(x => x.QuestionMedia).ThenInclude(x => x.Media)
             .AsSplitQuery()
             .OrderBy(x => x.Id).ToListAsync();
         if (variants.Count == 0) return Deny("NO_PUBLISHED_VARIANT");
@@ -206,6 +211,7 @@ public class StudentAttemptController : ControllerBase
             AllowViewResult = schedule.Exam.AllowViewResult == true
         };
         _db.ExamAttempts.Add(row);
+        await MediaReferenceWriter.AddAsync(_db, "exam", row.Id, snapshot);   // To-be T15
         await _db.SaveChangesAsync(); await tx.CommitAsync();
         return Ok(ApiResponse<object>.Ok(PublicState(row, now)));
     }
