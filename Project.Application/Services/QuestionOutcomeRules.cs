@@ -5,7 +5,7 @@ namespace Project.Application.Services;
 
 /// <summary>Kết quả một câu của một lượt/phiên đã chốt (To-be T11).</summary>
 public sealed record QuestionOutcomeResult(Guid SnapshotQuestionId, int SourceQuestionId, int? ChapterId,
-    IReadOnlyList<int> TagIds, bool IsCorrect, bool IsAnswered, IReadOnlyList<int> SelectedSourceAnswerIds, bool FromSnapshot);
+    IReadOnlyList<int> TagIds, bool IsCorrect, bool IsAnswered, IReadOnlyList<int> SelectedSourceAnswerIds, bool FromSnapshot, string? AnswerText = null);
 
 /// <summary>
 /// To-be T11 (Q13, QT11-2): đúng/sai từng câu theo đúng quy tắc của <see cref="AttemptScoring"/> (tất cả-hoặc-không,
@@ -21,10 +21,12 @@ public static class QuestionOutcomeRules
         var fromSnapshot = snapshot.Version >= 3;
         return snapshot.Questions.Select(question =>
         {
-            var selected = answers[question.Id].SelectedAnswerIds;
-            var correct = question.Options.Where(x => x.IsCorrect).Select(x => x.Id).ToHashSet();
-            var isAnswered = selected.Count > 0;
-            var isCorrect = isAnswered && selected.ToHashSet().SetEquals(correct);
+            var answer = answers[question.Id];
+            var selected = answer.SelectedAnswerIds;
+            // T16: cùng hàm với điểm; câu điền ngắn lưu bài làm đã chuẩn hóa (báo cáo "câu trả lời sai phổ biến")
+            var isAnswered = AnswerGrading.IsAnswered(question, answer);
+            var isCorrect = AnswerGrading.IsCorrect(question, answer);
+            var answerText = AnswerGrading.IsShortAnswer(question) && isAnswered ? ShortAnswerMatcher.StatsKey(question.ShortAnswer, answer.Text) : null;
             var bySnapshotId = question.Options.ToDictionary(x => x.Id, x => x.SourceAnswerId);
             var selectedSource = selected.Where(bySnapshotId.ContainsKey).Select(x => bySnapshotId[x]).Distinct().OrderBy(x => x).ToArray();
             int? chapterId; IReadOnlyList<int> tagIds;
@@ -33,7 +35,7 @@ public static class QuestionOutcomeRules
             { chapterId = current.ChapterId; tagIds = current.TagIds; }
             else { chapterId = null; tagIds = []; }
             return new QuestionOutcomeResult(question.Id, question.SourceQuestionId, chapterId,
-                tagIds.Distinct().OrderBy(x => x).ToArray(), isCorrect, isAnswered, selectedSource, fromSnapshot);
+                tagIds.Distinct().OrderBy(x => x).ToArray(), isCorrect, isAnswered, selectedSource, fromSnapshot, answerText);
         }).ToList();
     }
 }

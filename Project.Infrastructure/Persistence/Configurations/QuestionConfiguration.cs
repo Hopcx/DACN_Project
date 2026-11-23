@@ -32,6 +32,11 @@ namespace Project.Infrastructure.Persistence.Configurations
                   .WithMany(p => p.Questions)
                   .HasForeignKey(d => d.ChapterId)
                   .OnDelete(DeleteBehavior.Restrict);
+
+            // To-be T16: tùy chọn so khớp câu điền ngắn (chỉ loại 4)
+            entity.Property(e => e.ShortAnswerTolerance).HasPrecision(18, 6);
+            entity.ToTable(t => t.HasCheckConstraint("CK_Questions_ShortAnswerTolerance",
+                "[ShortAnswerTolerance] IS NULL OR ([ShortAnswerTolerance] >= 0 AND [ShortAnswerTolerance] <= 1000000000)"));
         }
     }
 

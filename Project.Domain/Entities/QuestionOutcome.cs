@@ -20,6 +20,8 @@ public class QuestionOutcome
     public bool IsCorrect { get; set; }
     public bool IsAnswered { get; set; }
     public string SelectedAnswerIdsJson { get; set; } = "[]";
+    // To-be T16 (QT16-4): bài làm câu điền ngắn đã chuẩn hóa (≤ 200 ký tự); loại khác NULL
+    public string? AnswerText { get; set; }
     public DateTime FinishedAtUtc { get; set; }
     public string ClassificationSource { get; set; } = "snapshot";
 }

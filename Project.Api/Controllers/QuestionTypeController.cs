@@ -49,6 +49,7 @@ namespace Project.Api.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateQuestionType(int id, [FromBody] QuestionTypeCreateDto dto)
         {
+            if (IsSystemType(id)) return Conflict(ApiResponse<string>.Fail(SystemTypeMessage));
             var result = await _service.UpdateQuestionTypeAsync(id, dto);
             if (result == null)
                 return NotFound(ApiResponse<string>.Fail("Question type không tồn tại"));
@@ -59,11 +60,16 @@ namespace Project.Api.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteQuestionType(int id)
         {
+            if (IsSystemType(id)) return Conflict(ApiResponse<string>.Fail(SystemTypeMessage));
             var deleted = await _service.DeleteQuestionTypeAsync(id);
             if (!deleted)
                 return NotFound(ApiResponse<string>.Fail("Question type không tồn tại hoặc xóa thất bại"));
 
             return Ok(ApiResponse<string>.Ok($"Xóa Question type với ID {id} thành công"));
         }
+
+        // Review T16: loại 1–4 (Đúng/Sai, Một đáp án, Nhiều đáp án, Điền ngắn) gắn với cách chấm trong code — không sửa, tắt hay xóa được
+        private const string SystemTypeMessage = "Loại câu hỏi hệ thống không thể sửa hoặc xóa.";
+        private static bool IsSystemType(int id) => id is >= 1 and <= Project.Application.Services.ShortAnswerMatcher.QuestionTypeId;
     }
 }

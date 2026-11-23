@@ -69,10 +69,11 @@ public class QuestionService : IQuestionService
             throw new BadRequestException("Lời giải tối đa 4000 ký tự.");
         if (string.IsNullOrWhiteSpace(dto.Content) || dto.Content.Trim().Length > 4000)
             throw new BadRequestException("Nội dung câu hỏi phải có từ 1 đến 4000 ký tự.");
-        if (dto.SubjectId <= 0 || dto.QuestionLevelId is <= 0 || dto.QuestionTypeId is < 1 or > 3)
-            throw new BadRequestException("Môn, loại và mức độ câu hỏi phải hợp lệ; chỉ hỗ trợ loại 1, 2, 3.");
+        if (dto.SubjectId <= 0 || dto.QuestionLevelId is <= 0 || dto.QuestionTypeId is < 1 or > ShortAnswerMatcher.QuestionTypeId)
+            throw new BadRequestException("Môn, loại và mức độ câu hỏi phải hợp lệ; chỉ hỗ trợ loại 1, 2, 3, 4.");
         if (dto.Status is not null and not 0 and not 1)
             throw new BadRequestException("Trạng thái chỉ nhận 0 hoặc 1.");
+        if (dto.QuestionTypeId == ShortAnswerMatcher.QuestionTypeId) { ValidateShortAnswer(dto); return; }
         if (dto.Answers == null || dto.Answers.Count < 2 || dto.Answers.Count > 20 ||
             dto.Answers.Any(x => string.IsNullOrWhiteSpace(x.Content) || x.Content.Trim().Length > 2000))
             throw new BadRequestException("Cần 2–20 đáp án, mỗi đáp án có nội dung từ 1 đến 2000 ký tự.");
@@ -89,13 +90,36 @@ public class QuestionService : IQuestionService
             throw new BadRequestException("Câu chọn nhiều đáp án cần ít nhất một đáp án đúng.");
     }
 
+    /// <summary>To-be T16 (QT16-3): 1–10 đáp án chấp nhận (đều đúng), mỗi đáp án 1–200 ký tự, không trùng sau chuẩn hóa;
+    /// sai số chỉ khi bật "so số", 0 ≤ sai số ≤ 1e9.</summary>
+    private static void ValidateShortAnswer(QuestionCreateDto dto)
+    {
+        var max = ShortAnswerMatcher.MaxTextLength;
+        if (dto.Answers == null || dto.Answers.Count < 1 || dto.Answers.Count > ShortAnswerMatcher.MaxAccepted ||
+            dto.Answers.Any(x => x == null || string.IsNullOrWhiteSpace(x.Content) || x.Content.Trim().Length > max))
+            throw new BadRequestException($"Câu điền ngắn cần 1–{ShortAnswerMatcher.MaxAccepted} đáp án chấp nhận, mỗi đáp án 1–{max} ký tự.");
+        if (dto.Answers.Any(x => !x.IsCorrect))
+            throw new BadRequestException("Mọi đáp án của câu điền ngắn đều là đáp án chấp nhận (đúng).");
+        var ignore = dto.ShortAnswerIgnoreDiacritics == true;
+        if (dto.Answers.Select(x => ShortAnswerMatcher.Normalize(x.Content, ignore)).Distinct().Count() != dto.Answers.Count)
+            throw new BadRequestException("Đáp án chấp nhận bị trùng sau khi chuẩn hóa (hoa/thường, khoảng trắng" + (ignore ? ", dấu" : "") + ").");
+        if (dto.ShortAnswerTolerance != null && dto.ShortAnswerNumeric != true)
+            throw new BadRequestException("Sai số chỉ dùng khi bật so số.");
+        if (dto.ShortAnswerTolerance is < 0 or > ShortAnswerMatcher.MaxTolerance || (dto.ShortAnswerTolerance is { } t && decimal.Round(t, 6) != t))
+            throw new BadRequestException("Sai số phải từ 0 đến 1.000.000.000, tối đa 6 chữ số thập phân.");
+    }
+
     private static Question Entity(QuestionCreateDto dto) => new()
     {
         Content = dto.Content.Trim(), Status = dto.Status ?? 1, SubjectId = dto.SubjectId,
         CreatedDate = DateTime.Now, CreatedAt = DateTime.Now,
         QuestionTypeId = dto.QuestionTypeId, QuestionLevelId = dto.QuestionLevelId,
         DocumentPath = dto.DocumentPath, ChapterId = dto.ChapterId,
-        Explanation = string.IsNullOrWhiteSpace(dto.Explanation) ? null : dto.Explanation.Trim()
+        Explanation = string.IsNullOrWhiteSpace(dto.Explanation) ? null : dto.Explanation.Trim(),
+        // To-be T16: chỉ loại 4 lưu tùy chọn so khớp; loại khác luôn null (bỏ qua giá trị client gửi)
+        ShortAnswerIgnoreDiacritics = dto.QuestionTypeId == ShortAnswerMatcher.QuestionTypeId ? dto.ShortAnswerIgnoreDiacritics == true : null,
+        ShortAnswerNumeric = dto.QuestionTypeId == ShortAnswerMatcher.QuestionTypeId ? dto.ShortAnswerNumeric == true : null,
+        ShortAnswerTolerance = dto.QuestionTypeId == ShortAnswerMatcher.QuestionTypeId && dto.ShortAnswerNumeric == true ? dto.ShortAnswerTolerance ?? 0 : null
     };
 
     private static List<Answer> BuildAnswers(QuestionCreateDto dto) => dto.Answers.Select(x => new Answer
@@ -110,6 +134,8 @@ public class QuestionService : IQuestionService
         QuestionTypeId = item.QuestionTypeId, QuestionLevelId = item.QuestionLevelId,
         IsUsedInExam = item.IsUsedInExam, ChapterId = item.ChapterId, Explanation = item.Explanation,
         TagIds = item.QuestionTags.Select(x => x.TagId).OrderBy(x => x).ToList(), MediaCount = item.QuestionMedia.Count,
+        ShortAnswerIgnoreDiacritics = item.ShortAnswerIgnoreDiacritics, ShortAnswerNumeric = item.ShortAnswerNumeric,
+        ShortAnswerTolerance = item.ShortAnswerTolerance,
         Answers = item.Answers.Where(x => x.Status != 255).OrderBy(x => x.Id).Select(x => new QuestionAnswerResponseDto
         { Id = x.Id, Content = x.Content, IsCorrect = x.IsCorrect }).ToList()
     };

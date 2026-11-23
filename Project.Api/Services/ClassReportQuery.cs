@@ -38,10 +38,10 @@ public sealed class ClassReportQuery
         var chosen = data.ChosenAttempts.Values.Distinct().ToList();
         var rows = chosen.Count == 0 ? []
             : await _db.QuestionOutcomes.AsNoTracking().Where(o => o.SourceKind == "exam" && chosen.Contains(o.SourceId))
-                .Select(o => new { o.SourceId, o.UserId, o.SourceQuestionId, o.ChapterId, o.IsCorrect, o.SelectedAnswerIdsJson, o.ClassificationSource })
+                .Select(o => new { o.SourceId, o.UserId, o.SourceQuestionId, o.ChapterId, o.IsCorrect, o.SelectedAnswerIdsJson, o.AnswerText, o.ClassificationSource })
                 .ToListAsync(ct);
         var outcomes = rows.Select(o => new ReportOutcome(o.UserId, o.SourceQuestionId, o.ChapterId, o.IsCorrect,
-            JsonSerializer.Deserialize<int[]>(o.SelectedAnswerIdsJson) ?? [])).ToList();
+            JsonSerializer.Deserialize<int[]>(o.SelectedAnswerIdsJson) ?? [], o.AnswerText)).ToList();
         // Review T12: đáp án đúng theo SNAPSHOT lúc thi (không theo ngân hàng hiện tại), đọc bằng OPENJSON trong SQL để không
         // kéo SnapshotJson về API. Chỉ dùng nội bộ để loại đáp án đúng khỏi "đáp án nhiễu"; không trả ra ngoài.
         var correctIds = chosen.Count == 0 ? new HashSet<int>()
@@ -95,7 +95,9 @@ public sealed class ClassReportQuery
                 var chapter = h.ChapterId == null ? null : chapterInfo.GetValueOrDefault(h.ChapterId.Value);
                 return new ReportHardView(h.SourceQuestionId, q == null ? "(câu đã xóa)" : Shorten(q.Content), q == null || q.Status != 1,
                     chapter?.Name, q?.Level, h.Answers, h.Correct, h.Rate,
-                    h.DistractorAnswerId == null ? null : Shorten(distractors.GetValueOrDefault(h.DistractorAnswerId.Value) ?? "(đáp án đã xóa)"),
+                    // T16: câu điền ngắn hiện câu trả lời sai phổ biến nhất (đã chuẩn hóa) ở cột đáp án nhiễu
+                    h.WrongText != null ? Shorten($"Trả lời: “{h.WrongText}”")
+                        : h.DistractorAnswerId == null ? null : Shorten(distractors.GetValueOrDefault(h.DistractorAnswerId.Value) ?? "(đáp án đã xóa)"),
                     h.DistractorCount);
             }).ToList())
         { Ranking = data };

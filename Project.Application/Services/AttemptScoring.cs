@@ -38,11 +38,8 @@ public static class AttemptScoring
         decimal raw = 0;
         foreach (var question in snapshot.Questions)
         {
-            var selected = answers[question.Id].SelectedAnswerIds;
-            if (selected.Count == 0) continue;
-            var correct = question.Options.Where(x => x.IsCorrect).Select(x => x.Id).ToHashSet();
-            // All-or-nothing for every supported question type. Missing or extra options score zero.
-            if (selected.ToHashSet().SetEquals(correct))
+            // All-or-nothing for every supported question type (T16: short answer matches an accepted answer).
+            if (AnswerGrading.IsCorrect(question, answers[question.Id]))
                 raw = checked(raw + Convert.ToDecimal(question.Point));
         }
         // Testify uses Math.Round(score, 2) and compares before rounding.
