@@ -362,3 +362,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# To-be T14: thư mục media mặc định khi chạy Development (Media:RootPath = ../dacn-media-dev tính từ Project.Api)
+/dacn-media-dev/

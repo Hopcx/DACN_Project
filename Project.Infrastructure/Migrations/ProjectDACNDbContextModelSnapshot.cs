@@ -946,6 +946,72 @@ namespace Project.Infrastructure.Migrations
                     b.ToTable("Logs");
                 });
 
+            modelBuilder.Entity("Project.Domain.Entities.MediaFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Extension")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int?>("Height")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("OriginalName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<byte>("Status")
+                        .HasColumnType("tinyint");
+
+                    b.Property<DateTime>("UploadedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("UploadedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("Width")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Sha256")
+                        .IsUnique()
+                        .HasDatabaseName("UX_MediaFiles_Sha256");
+
+                    b.HasIndex("UploadedBy");
+
+                    b.ToTable("MediaFiles", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MediaFiles_Kind", "[Kind] IN ('image','audio')");
+
+                            t.HasCheckConstraint("CK_MediaFiles_Size", "[SizeBytes] > 0");
+                        });
+                });
+
             modelBuilder.Entity("Project.Domain.Entities.Permission", b =>
                 {
                     b.Property<int>("Id")
@@ -1209,6 +1275,25 @@ namespace Project.Infrastructure.Migrations
                             Name = "Khó",
                             Status = true
                         });
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.QuestionMedia", b =>
+                {
+                    b.Property<int>("QuestionId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("MediaId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("QuestionId", "MediaId");
+
+                    b.HasIndex("MediaId")
+                        .HasDatabaseName("IX_QuestionMedia_Media");
+
+                    b.ToTable("QuestionMedia", (string)null);
                 });
 
             modelBuilder.Entity("Project.Domain.Entities.QuestionOutcome", b =>
@@ -2003,6 +2088,15 @@ namespace Project.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Project.Domain.Entities.MediaFile", b =>
+                {
+                    b.HasOne("Project.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UploadedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Project.Domain.Entities.PracticeSession", b =>
                 {
                     b.HasOne("Project.Domain.Entities.Subject", null)
@@ -2057,6 +2151,25 @@ namespace Project.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Answer");
+
+                    b.Navigation("Question");
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.QuestionMedia", b =>
+                {
+                    b.HasOne("Project.Domain.Entities.MediaFile", "Media")
+                        .WithMany("QuestionMedia")
+                        .HasForeignKey("MediaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Project.Domain.Entities.Question", "Question")
+                        .WithMany("QuestionMedia")
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Media");
 
                     b.Navigation("Question");
                 });
@@ -2207,6 +2320,11 @@ namespace Project.Infrastructure.Migrations
                     b.Navigation("Users");
                 });
 
+            modelBuilder.Entity("Project.Domain.Entities.MediaFile", b =>
+                {
+                    b.Navigation("QuestionMedia");
+                });
+
             modelBuilder.Entity("Project.Domain.Entities.Question", b =>
                 {
                     b.Navigation("AnswerSubmissions");
@@ -2216,6 +2334,8 @@ namespace Project.Infrastructure.Migrations
                     b.Navigation("ExamDetailQuestions");
 
                     b.Navigation("QuestionAnswers");
+
+                    b.Navigation("QuestionMedia");
 
                     b.Navigation("QuestionTags");
                 });
