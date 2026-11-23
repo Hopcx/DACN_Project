@@ -14,6 +14,8 @@ namespace Project.Application.DTOs.QuestionDTO
         public int? ChapterId { get; set; }
         public string? Explanation { get; set; }
         public List<int> TagIds { get; set; } = new();
+        // To-be T14: số media đính kèm (chi tiết qua /web/questions/{id}/media). DocumentPath: deprecated, thay bằng media.
+        public int MediaCount { get; set; }
         public List<QuestionAnswerResponseDto> Answers { get; set; } = new();
     }
 

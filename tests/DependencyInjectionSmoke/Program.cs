@@ -26,6 +26,7 @@ ClassRankingSmoke.Run();
 QuestionOutcomeSmoke.Run();
 ClassReportSmoke.Run();
 XlsxReportSmoke.Run();
+MediaSmoke.Run();
 QuestionWorkbookSmoke.Run();
 QuestionExportSmoke.Run();
 AccountWorkbookSmoke.Run();
@@ -55,6 +56,8 @@ services.AddScoped<TagStore>();
 services.AddScoped<PracticeFinalizer>();
 services.AddScoped<ClassRankingQuery>();
 services.AddScoped<ClassReportQuery>();
+services.AddSingleton(new MediaSettings { RootPath = Path.Combine(Path.GetTempPath(), "dacn-di-smoke-media"), SigningKey = new byte[32], Limits = new Project.Application.Services.MediaLimits().Validate() });
+services.AddSingleton<IMediaStorage, LocalMediaStorage>();
 services.AddSingleton(new Project.Application.Services.AnalysisThresholds().Validate());
 services.AddHttpContextAccessor();
 
@@ -85,7 +88,8 @@ var controllerTypes = new[]
     , typeof(QuestionController), typeof(QuestionImportController), typeof(TeacherClassController),
     typeof(StudentAttemptController), typeof(AnswerController), typeof(ExamController),
     typeof(QuestionExportController), typeof(AccountExcelController), typeof(AdminAuditController),
-    typeof(TeacherOverviewController), typeof(ChapterController), typeof(TagController), typeof(PracticeController), typeof(ReviewFlagController), typeof(StudentClassController), typeof(StudentAnalysisController)
+    typeof(TeacherOverviewController), typeof(ChapterController), typeof(TagController), typeof(PracticeController), typeof(ReviewFlagController), typeof(StudentClassController), typeof(StudentAnalysisController),
+    typeof(MediaController), typeof(QuestionMediaController)
 };
 
 foreach (var controllerType in controllerTypes)

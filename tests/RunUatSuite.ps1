@@ -35,11 +35,13 @@ $suite = @(
     @{ Name = 'TaskToBeT11StudentAnalysisApiSmoke'; Browser = $false; Marker = 'TOBE_T11_STUDENT_ANALYSIS_SMOKE' },
     @{ Name = 'TaskToBeT12ClassReportApiSmoke'; Browser = $false; Marker = 'TOBE_T12_CLASS_REPORT_SMOKE' },
     @{ Name = 'TaskToBeT13ClassReportExportApiSmoke'; Browser = $false; Marker = 'TOBE_T13_CLASS_REPORT_EXPORT_SMOKE' },
+    @{ Name = 'TaskToBeT14MediaApiSmoke'; Browser = $false; Marker = 'TOBE_T14_MEDIA_SMOKE' },
     @{ Name = 'TaskP1RoleRegressionSmoke';     Browser = $true;  Marker = 'P1_ROLE_REGRESSION_SMOKE' },
     @{ Name = 'TaskP4FrontendSmoke';           Browser = $true;  Marker = 'P4_FRONTEND_SMOKE' },
     @{ Name = 'TaskToBeT7PracticeFrontendSmoke'; Browser = $true; Marker = 'TOBE_T7_PRACTICE_FRONTEND_SMOKE' },
     @{ Name = 'TaskToBeT10RankingFrontendSmoke'; Browser = $true; Marker = 'TOBE_T10_RANKING_FRONTEND_SMOKE' },
     @{ Name = 'TaskToBeT11AnalysisFrontendSmoke'; Browser = $true; Marker = 'TOBE_T11_ANALYSIS_FRONTEND_SMOKE' },
+    @{ Name = 'TaskToBeT14MediaFrontendSmoke'; Browser = $true; Marker = 'TOBE_T14_MEDIA_FRONTEND_SMOKE' },
     @{ Name = 'TaskSessionRateLimitApiSmoke';  Browser = $false; Marker = 'SESSION_RATE_LIMIT_SMOKE' }
 )
 if ($Only.Count -gt 0) { $suite = @($suite | Where-Object { $Only -contains $_.Name }) }

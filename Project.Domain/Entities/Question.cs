@@ -54,5 +54,7 @@ namespace Project.Domain.Entities
         public virtual QuestionType QuestionType { get; set; } = null!;
         public virtual Chapter? Chapter { get; set; }
         public virtual ICollection<QuestionTag> QuestionTags { get; set; } = new List<QuestionTag>();
+        // To-be T14: đính kèm media
+        public virtual ICollection<QuestionMedia> QuestionMedia { get; set; } = new List<QuestionMedia>();
     }
 }
