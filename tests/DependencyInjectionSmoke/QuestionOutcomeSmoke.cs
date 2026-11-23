@@ -20,7 +20,7 @@ internal static class QuestionOutcomeSmoke
         Check(built.ChapterId == 3 && built.TagIds!.SequenceEqual(new[] { 4, 9 }), "v3 captures chapter and sorted tags.");
         var v3 = new AttemptSnapshot(AttemptSnapshot.CurrentVersion, 1, 1, "E", "V", new[] { built });
         var round = JsonSerializer.Deserialize<AttemptSnapshot>(JsonSerializer.Serialize(v3, json), json)!;
-        Check(round.Version == 3 && round.Questions[0].ChapterId == 3 && round.Questions[0].TagIds!.SequenceEqual(new[] { 4, 9 }),
+        Check(round.Version == AttemptSnapshot.CurrentVersion && round.Questions[0].ChapterId == 3 && round.Questions[0].TagIds!.SequenceEqual(new[] { 4, 9 }),
             "v3 JSON round-trips.");
         var v2Json = """{"version":2,"examId":1,"examDetailId":1,"examName":"E","variantCode":"V","questions":[{"id":"00000000-0000-0000-0000-000000000001","sourceQuestionId":7,"questionTypeId":2,"content":"Q","point":1,"options":[],"explanation":null}]}""";
         var v2 = JsonSerializer.Deserialize<AttemptSnapshot>(v2Json, json)!;

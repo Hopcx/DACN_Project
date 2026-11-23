@@ -70,6 +70,9 @@ namespace Project.Api
                 builder.Services.AddScoped<PracticeFinalizer>();
                 builder.Services.AddScoped<ClassRankingQuery>();
                 builder.Services.AddScoped<ClassReportQuery>();
+                // To-be T14: media — cấu hình kiểm ngay khi khởi động (QT14-4)
+                builder.Services.AddSingleton(MediaSettings.From(builder.Configuration, builder.Environment, builder.Environment.WebRootPath));
+                builder.Services.AddSingleton<IMediaStorage, LocalMediaStorage>();
                 // To-be T11: ngưỡng phân tích (kiểm ngay khi khởi động) + worker bù QuestionOutcomes
                 builder.Services.AddSingleton((builder.Configuration.GetSection("Analysis").Get<Project.Application.Services.AnalysisThresholds>()
                     ?? new Project.Application.Services.AnalysisThresholds()).Validate());
@@ -238,6 +241,15 @@ namespace Project.Api
                 // ===== CÁCH MỚI: Exception middleware với custom exception và logging =====
                 app.UseMiddleware<ExceptionMiddleware>();
                 app.UseHttpsRedirection();
+                // Review T14: trần thân request tải media = giới hạn cấu hình (Media:*) + phần dư multipart, đặt trước khi Kestrel đệm form
+                var mediaUploadCap = app.Services.GetRequiredService<MediaSettings>().Limits.MaxUploadBytes + 64 * 1024;
+                app.Use(async (context, next) =>
+                {
+                    if (HttpMethods.IsPost(context.Request.Method) && context.Request.Path.Equals("/web/media", StringComparison.OrdinalIgnoreCase) &&
+                        context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } size)
+                        size.MaxRequestBodySize = mediaUploadCap;
+                    await next();
+                });
                 app.UseRouting();
                 app.UseRateLimiter();
                 // Middleware xác thực và phân quyền

@@ -109,7 +109,7 @@ public class QuestionService : IQuestionService
         Status = item.Status, SubjectId = item.SubjectId, DocumentPath = item.DocumentPath,
         QuestionTypeId = item.QuestionTypeId, QuestionLevelId = item.QuestionLevelId,
         IsUsedInExam = item.IsUsedInExam, ChapterId = item.ChapterId, Explanation = item.Explanation,
-        TagIds = item.QuestionTags.Select(x => x.TagId).OrderBy(x => x).ToList(),
+        TagIds = item.QuestionTags.Select(x => x.TagId).OrderBy(x => x).ToList(), MediaCount = item.QuestionMedia.Count,
         Answers = item.Answers.Where(x => x.Status != 255).OrderBy(x => x.Id).Select(x => new QuestionAnswerResponseDto
         { Id = x.Id, Content = x.Content, IsCorrect = x.IsCorrect }).ToList()
     };

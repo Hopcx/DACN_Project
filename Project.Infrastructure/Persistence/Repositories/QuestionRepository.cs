@@ -23,7 +23,7 @@ namespace Project.Infrastructure.Persistence.Repositories
         public async Task<List<Question>> GetAllQuestionsAsync(string? textSearch, int? subjectId, int? questionTypeId, int? questionLevelId,
             int? chapterId = null, IReadOnlyCollection<int>? tagIds = null)
         {
-            var query = _context.Questions.Include(x => x.Answers).Include(x => x.QuestionTags).AsSplitQuery().AsNoTracking().AsQueryable();
+            var query = _context.Questions.Include(x => x.Answers).Include(x => x.QuestionTags).Include(x => x.QuestionMedia).AsSplitQuery().AsNoTracking().AsQueryable();
             if (chapterId.HasValue) query = query.Where(x => x.ChapterId == chapterId.Value);
             if (tagIds is { Count: > 0 })
             {
@@ -49,7 +49,7 @@ namespace Project.Infrastructure.Persistence.Repositories
 
         public async Task<Question> GetQuestionByIdAsync(int id)
         {
-            var question = await _context.Questions.Include(x => x.Answers).Include(x => x.QuestionTags).AsSplitQuery()
+            var question = await _context.Questions.Include(x => x.Answers).Include(x => x.QuestionTags).Include(x => x.QuestionMedia).AsSplitQuery()
                 .AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
             if (question != null)
                 question.IsUsedInExam = await _context.ExamDetailQuestions.AnyAsync(x => x.QuestionId == id);

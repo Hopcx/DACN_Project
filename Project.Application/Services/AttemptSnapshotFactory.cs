@@ -52,12 +52,21 @@ public static class AttemptSnapshotFactory
             Array.AsReadOnly(question.Answers.Where(x => x.Status == 1).OrderBy(x => x.Id).Select(answer =>
                 new AttemptOptionSnapshot(Guid.NewGuid(), answer.Id, answer.Content, answer.IsCorrect)).ToArray()),
             string.IsNullOrWhiteSpace(question.Explanation) ? null : question.Explanation.Trim(),
-            question.ChapterId, Array.AsReadOnly(question.QuestionTags.Select(x => x.TagId).Distinct().OrderBy(x => x).ToArray()));
+            question.ChapterId, Array.AsReadOnly(question.QuestionTags.Select(x => x.TagId).Distinct().OrderBy(x => x).ToArray()),
+            // v4 (T15): media đang gắn và còn hoạt động, theo thứ tự; người gọi phải Include(QuestionMedia).ThenInclude(Media)
+            Array.AsReadOnly(question.QuestionMedia.Where(x => x.Media != null && x.Media.Status == 1).OrderBy(x => x.SortOrder)
+                .Select(x => new AttemptMediaSnapshot(x.MediaId, x.Media.Kind, x.Media.Width, x.Media.Height)).ToArray()));
 
-    public static IReadOnlyList<AttemptQuestionDto> ForStudent(AttemptSnapshot snapshot) =>
+    // To-be T15: mediaUrl ký URL cho đúng học viên đang xem; null → không cấp URL (media rỗng).
+    public static IReadOnlyList<AttemptQuestionDto> ForStudent(AttemptSnapshot snapshot, Func<Guid, string>? mediaUrl = null) =>
         Array.AsReadOnly(snapshot.Questions.Select(question => new AttemptQuestionDto(
             question.Id, question.QuestionTypeId, question.Content,
-            Array.AsReadOnly(question.Options.Select(option => new AttemptOptionDto(option.Id, option.Content)).ToArray()))).ToArray());
+            Array.AsReadOnly(question.Options.Select(option => new AttemptOptionDto(option.Id, option.Content)).ToArray()),
+            MediaFor(question, mediaUrl))).ToArray());
+
+    public static IReadOnlyList<AttemptMediaDto> MediaFor(AttemptQuestionSnapshot question, Func<Guid, string>? mediaUrl) =>
+        mediaUrl == null || question.Media == null ? Array.Empty<AttemptMediaDto>()
+            : Array.AsReadOnly(question.Media.Select(m => new AttemptMediaDto(m.Id, m.Kind, m.Width, m.Height, mediaUrl(m.Id))).ToArray());
 
     // Full replacement: omitted questions become unanswered. Validate all input before
     // returning a canonical, detached draft; the future store owns revision and transaction.
