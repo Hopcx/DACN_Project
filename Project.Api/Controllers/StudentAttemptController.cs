@@ -136,17 +136,26 @@ public class StudentAttemptController : ControllerBase
         var snapshot = Snapshot(row);
         var answers = JsonSerializer.Deserialize<List<AttemptAnswerDto>>(row.Submission.AnswersJson, Json)
             ?? new List<AttemptAnswerDto>();
-        var selected = answers.ToDictionary(x => x.QuestionId, x => x.SelectedAnswerIds);
-        var questions = snapshot.Questions.Select(question => new {
+        var byQuestion = answers.ToDictionary(x => x.QuestionId);
+        var questions = snapshot.Questions.Select(question =>
+        {
+            var answer = byQuestion.GetValueOrDefault(question.Id) ?? new AttemptAnswerDto(question.Id, Array.Empty<Guid>());
+            var shortAnswer = AnswerGrading.IsShortAnswer(question);
+            return new {
             id = question.Id, questionTypeId = question.QuestionTypeId, content = question.Content,
-            selectedAnswerIds = selected.TryGetValue(question.Id, out var ids) ? ids : Array.Empty<Guid>(),
-            options = question.Options.Select(option => new {
+            selectedAnswerIds = answer.SelectedAnswerIds,
+            // To-be T16: câu điền ngắn không có lựa chọn — trả bài làm + đáp án chấp nhận; mọi câu có isCorrect (cùng hàm với điểm)
+            options = question.Options.Where(_ => !shortAnswer).Select(option => new {
                 id = option.Id, content = option.Content, isCorrect = option.IsCorrect
             }).ToList(),
+            text = shortAnswer ? answer.Text : null,
+            acceptedAnswers = shortAnswer ? AnswerGrading.AcceptedAnswers(question) : null,
+            isCorrect = AnswerGrading.IsCorrect(question, answer),
             // To-be T4: lời giải mở cùng điều kiện với đáp án đúng; snapshot v1 không có → null
             explanation = question.Explanation,
             // To-be T15: media của câu, cùng điều kiện mở review
             media = AttemptSnapshotFactory.MediaFor(question, MediaUrlFactory.For(_media, row.UserId))
+            };
         }).ToList();
         return Ok(ApiResponse<object>.Ok(new {
             attemptId = row.Id, state = row.State, reviewedFrom = "attemptSnapshot", snapshotVersion = snapshot.Version,

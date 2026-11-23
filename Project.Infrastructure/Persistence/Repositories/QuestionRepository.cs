@@ -131,6 +131,9 @@ namespace Project.Infrastructure.Persistence.Repositories
                 question.DocumentPath = incoming.DocumentPath;
                 question.ChapterId = incoming.ChapterId;
                 question.Explanation = incoming.Explanation;
+                question.ShortAnswerIgnoreDiacritics = incoming.ShortAnswerIgnoreDiacritics;   // To-be T16
+                question.ShortAnswerNumeric = incoming.ShortAnswerNumeric;
+                question.ShortAnswerTolerance = incoming.ShortAnswerTolerance;
                 // Physical removal is safe only for questions never placed in an exam.
                 _context.Answers.RemoveRange(question.Answers);
                 // To-be T2: tập tag thay thế toàn bộ

@@ -22,6 +22,7 @@ public class QuestionOutcomeConfiguration : IEntityTypeConfiguration<QuestionOut
         entity.Property(x => x.ClassificationSource).HasMaxLength(20).IsRequired();
         entity.Property(x => x.TagIdsJson).IsRequired();
         entity.Property(x => x.SelectedAnswerIdsJson).IsRequired();
+        entity.Property(x => x.AnswerText).HasMaxLength(200);   // To-be T16
         // Phân tích học viên: lọc UserId + SubjectId + cửa sổ ngày; INCLUDE các cột đọc để không key lookup (review T11)
         entity.HasIndex(x => new { x.UserId, x.SubjectId, x.FinishedAtUtc }).HasDatabaseName("IX_QuestionOutcomes_User_Subject_Finished")
             .IncludeProperties(x => new { x.SourceKind, x.SourceId, x.ChapterId, x.TagIdsJson, x.IsCorrect, x.ClassificationSource });

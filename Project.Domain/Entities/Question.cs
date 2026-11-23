@@ -29,6 +29,10 @@ namespace Project.Domain.Entities
         // To-be 3.1: chương (cùng môn với câu) và lời giải; câu cũ để NULL
         public int? ChapterId { get; set; }
         public string? Explanation { get; set; }
+        // To-be T16 (QT16-2): tùy chọn so khớp câu điền ngắn (loại 4); loại khác để NULL. Đáp án chấp nhận = Answers IsCorrect.
+        public bool? ShortAnswerIgnoreDiacritics { get; set; }
+        public bool? ShortAnswerNumeric { get; set; }
+        public decimal? ShortAnswerTolerance { get; set; }
 
         public Guid? CreatedBy { get; set; }
 

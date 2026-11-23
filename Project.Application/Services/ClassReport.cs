@@ -1,12 +1,14 @@
 namespace Project.Application.Services;
 
 /// <summary>Kết quả một câu trong lượt được tính của một học viên (To-be T12).</summary>
-public sealed record ReportOutcome(Guid UserId, int SourceQuestionId, int? ChapterId, bool IsCorrect, IReadOnlyList<int> SelectedAnswerIds);
+// To-be T16: AnswerText = bài làm câu điền ngắn đã chuẩn hóa (loại khác null).
+public sealed record ReportOutcome(Guid UserId, int SourceQuestionId, int? ChapterId, bool IsCorrect, IReadOnlyList<int> SelectedAnswerIds,
+    string? AnswerText = null);
 
 public sealed record ReportChapter(int? ChapterId, int Total, int Correct, decimal? Rate, int StudentCount, IReadOnlyList<Guid> WeakStudents);
 
 public sealed record ReportHardQuestion(int SourceQuestionId, int Answers, int Correct, decimal? Rate, int? DistractorAnswerId, int DistractorCount,
-    int? ChapterId = null);
+    int? ChapterId = null, string? WrongText = null);
 
 public sealed record ClassReportResult(IReadOnlyList<ReportChapter> Chapters, IReadOnlyList<ReportHardQuestion> HardQuestions,
     int MaxAnswersPerQuestion, int QuestionCount);
@@ -47,9 +49,13 @@ public static class ClassReport
                     .Where(id => !correctAnswerIds.Contains(id))
                     .GroupBy(id => id).OrderByDescending(d => d.Count()).ThenBy(d => d.Key).FirstOrDefault();
                 // Review T12: chương của câu theo kết quả (snapshot) — chương xuất hiện nhiều nhất, hòa thì Id nhỏ — khớp bảng "Theo chương"
+                // T16: câu điền ngắn — câu trả lời sai (đã chuẩn hóa) phổ biến nhất thay cho đáp án nhiễu (hòa: thứ tự chữ)
+                var wrongText = x.Items.Where(o => !o.IsCorrect && o.AnswerText != null).GroupBy(o => o.AnswerText!)
+                    .OrderByDescending(d => d.Count()).ThenBy(d => d.Key, StringComparer.Ordinal).FirstOrDefault();
                 var chapter = x.Items.GroupBy(o => o.ChapterId).OrderByDescending(c => c.Count()).ThenBy(c => c.Key ?? int.MaxValue).First().Key;
                 return new ReportHardQuestion(x.Key, x.Answers, x.Correct, AnalysisRules.Rate(x.Correct, x.Answers),
-                    distractor?.Key, distractor?.Count() ?? 0, chapter);
+                    distractor?.Key, distractor != null ? distractor.Count() : wrongText?.Count() ?? 0, chapter,
+                    distractor == null ? wrongText?.Key : null);
             })
             .OrderBy(x => (decimal)x.Correct / x.Answers).ThenByDescending(x => x.Answers).ThenBy(x => x.SourceQuestionId)
             .Take(MaxHardQuestions).ToList();

@@ -16,6 +16,10 @@ namespace Project.Application.DTOs.QuestionDTO
         public List<int> TagIds { get; set; } = new();
         // To-be T14: số media đính kèm (chi tiết qua /web/questions/{id}/media). DocumentPath: deprecated, thay bằng media.
         public int MediaCount { get; set; }
+        // To-be T16: tùy chọn câu điền ngắn (loại 4; loại khác null). Answers của loại 4 = đáp án chấp nhận.
+        public bool? ShortAnswerIgnoreDiacritics { get; set; }
+        public bool? ShortAnswerNumeric { get; set; }
+        public decimal? ShortAnswerTolerance { get; set; }
         public List<QuestionAnswerResponseDto> Answers { get; set; } = new();
     }
 

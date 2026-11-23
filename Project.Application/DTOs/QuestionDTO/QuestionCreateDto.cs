@@ -12,6 +12,10 @@ namespace Project.Application.DTOs.QuestionDTO
         public int? ChapterId { get; set; }
         public string? Explanation { get; set; }
         public List<int>? TagIds { get; set; }
+        // To-be T16: tùy chọn câu điền ngắn (loại 4) — loại khác phải để null
+        public bool? ShortAnswerIgnoreDiacritics { get; set; }
+        public bool? ShortAnswerNumeric { get; set; }
+        public decimal? ShortAnswerTolerance { get; set; }
         public List<QuestionAnswerInputDto> Answers { get; set; } = new();
     }
 
