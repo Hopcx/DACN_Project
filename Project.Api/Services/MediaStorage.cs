@@ -10,6 +10,8 @@ public interface IMediaStorage
     Task SaveAsync(Guid id, byte[] content, CancellationToken ct = default);
     /// <summary>Đường dẫn vật lý để phục vụ (Range); null nếu file không còn.</summary>
     string? PhysicalPath(Guid id);
+    /// <summary>To-be T15: xóa file (không lỗi nếu đã không còn).</summary>
+    void Delete(Guid id);
 }
 
 public sealed class MediaSettings
@@ -87,5 +89,11 @@ public sealed class LocalMediaStorage : IMediaStorage
     {
         var path = PathOf(id);
         return File.Exists(path) ? path : null;
+    }
+
+    public void Delete(Guid id)
+    {
+        var path = PathOf(id);
+        if (File.Exists(path)) File.Delete(path);
     }
 }

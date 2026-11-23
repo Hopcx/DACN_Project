@@ -115,7 +115,38 @@ internal static class MediaSmoke
         Check(path == Path.Combine(root, id.ToString("N")[..2], id.ToString("N")) && File.ReadAllBytes(path!).Length == 3 &&
             storage.PhysicalPath(Guid.NewGuid()) == null && !Directory.GetFiles(root, "*.tmp", SearchOption.AllDirectories).Any(), "Local storage.");
         Directory.Delete(root, true);
-        Console.WriteLine("MEDIA_MAGIC_BYTES_DIMENSIONS_TOKEN_SETTINGS_STORAGE=PASS (isolated; no SQL/API)");
+        // To-be T15: snapshot v4 chụp media (đúng thứ tự, bỏ media đã tắt); URL học viên ký cho đúng user + media
+        var q = new Project.Domain.Entities.Question { Id = 5, QuestionTypeId = 2, Content = "Q", Status = 1 };
+        q.Answers.Add(new Project.Domain.Entities.Answer { Id = 50, QuestionId = 5, Content = "A", IsCorrect = true, Status = 1 });
+        q.Answers.Add(new Project.Domain.Entities.Answer { Id = 51, QuestionId = 5, Content = "B", IsCorrect = false, Status = 1 });
+        Guid m1 = Guid.NewGuid(), m2 = Guid.NewGuid(), m3 = Guid.NewGuid();
+        q.QuestionMedia.Add(new Project.Domain.Entities.QuestionMedia { QuestionId = 5, MediaId = m2, SortOrder = 2,
+            Media = new Project.Domain.Entities.MediaFile { Id = m2, Kind = "audio", Status = 1 } });
+        q.QuestionMedia.Add(new Project.Domain.Entities.QuestionMedia { QuestionId = 5, MediaId = m1, SortOrder = 1,
+            Media = new Project.Domain.Entities.MediaFile { Id = m1, Kind = "image", Width = 640, Height = 480, Status = 1 } });
+        q.QuestionMedia.Add(new Project.Domain.Entities.QuestionMedia { QuestionId = 5, MediaId = m3, SortOrder = 3,
+            Media = new Project.Domain.Entities.MediaFile { Id = m3, Kind = "image", Status = 0 } });
+        var built = AttemptSnapshotFactory.BuildQuestion(q, 1);
+        Check(built.Media!.Select(x => x.Id).SequenceEqual(new[] { m1, m2 }) && built.Media[0].Width == 640 && built.Media[1].Kind == "audio",
+            "v4 captures active media in order.");
+        var json = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
+        var snap = new Project.Domain.ValueObjects.AttemptSnapshot(Project.Domain.ValueObjects.AttemptSnapshot.CurrentVersion, 1, 1, "E", "V", [built]);
+        var back = System.Text.Json.JsonSerializer.Deserialize<Project.Domain.ValueObjects.AttemptSnapshot>(System.Text.Json.JsonSerializer.Serialize(snap, json), json)!;
+        Check(back.Version == 4 && back.Questions[0].Media!.Count == 2, "v4 JSON round-trips media.");
+        var v3 = System.Text.Json.JsonSerializer.Deserialize<Project.Domain.ValueObjects.AttemptSnapshot>(
+            """{"version":3,"examId":1,"examDetailId":1,"examName":"E","variantCode":"V","questions":[{"id":"00000000-0000-0000-0000-000000000001","sourceQuestionId":5,"questionTypeId":2,"content":"Q","point":1,"options":[],"chapterId":2,"tagIds":[1]}]}""", json)!;
+        Check(v3.Questions[0].Media == null && AttemptSnapshotFactory.ForStudent(v3, _ => "x")[0].Media!.Count == 0, "v3 (no media) still reads; no media for students.");
+        var student = Guid.NewGuid();
+        var urls = MediaUrlFactory.For(prod, student);
+        var dto = AttemptSnapshotFactory.ForStudent(snap, urls)[0];
+        var t = Uri.UnescapeDataString(dto.Media![0].Url.Split("?t=")[1]);
+        Check(dto.Media.Count == 2 && dto.Media[0].Url.StartsWith($"/web/media/{m1}?t=") && MediaToken.Verify(prod.SigningKey, m1, t, DateTimeOffset.UtcNow) == student &&
+            MediaToken.Verify(prod.SigningKey, m2, t, DateTimeOffset.UtcNow) == null, "Student URL signed for that user and that media only.");
+        Check(AttemptSnapshotFactory.ForStudent(snap)[0].Media!.Count == 0, "No URL function → no media exposed.");
+        var json2 = System.Text.Json.JsonSerializer.Serialize(dto, json);
+        Check(!json2.Contains("isCorrect", StringComparison.OrdinalIgnoreCase) && !json2.Contains("sourceQuestionId", StringComparison.OrdinalIgnoreCase),
+            "Student DTO with media still leaks no correctness/source ids.");
+        Console.WriteLine("MEDIA_MAGIC_BYTES_DIMENSIONS_TOKEN_SETTINGS_STORAGE_SNAPSHOT_V4=PASS (isolated; no SQL/API)");
     }
 
     private sealed class Env(string name, string root) : IHostEnvironment

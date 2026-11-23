@@ -36,7 +36,8 @@ public class PracticeController : ControllerBase
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private readonly ProjectDACNDbContext _db;
     private readonly PracticeFinalizer _finalizer;
-    public PracticeController(ProjectDACNDbContext db, PracticeFinalizer finalizer) { _db = db; _finalizer = finalizer; }
+    private readonly MediaSettings _media;
+    public PracticeController(ProjectDACNDbContext db, PracticeFinalizer finalizer, MediaSettings media) { _db = db; _finalizer = finalizer; _media = media; }
 
     private Guid? Actor() => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
     private static IActionResult Deny(string code) => new ConflictObjectResult(ApiResponse<string>.Fail(code));
@@ -88,6 +89,15 @@ public class PracticeController : ControllerBase
         return rows.Where(x => PracticeSnapshotFactory.IsUsable(x, criteria.SubjectId)).ToList();
     }
 
+    /// <summary>Review T15: chỉ nạp media cho các câu đã chọn (không nạp cho cả pool) trước khi chụp snapshot.</summary>
+    private async Task AttachMediaAsync(IReadOnlyList<Question> questions)
+    {
+        var ids = questions.Select(x => x.Id).ToList();
+        var media = await _db.QuestionMedia.AsNoTracking().Include(x => x.Media).Where(x => ids.Contains(x.QuestionId)).ToListAsync();
+        var byQuestion = media.ToLookup(x => x.QuestionId);
+        foreach (var question in questions) question.QuestionMedia = byQuestion[question.Id].ToList();
+    }
+
     private static ObjectResult NotEnough(int available, int requested) => new ConflictObjectResult(new ApiResponse<object>
     {
         Success = false, Message = "PRACTICE_NOT_ENOUGH_QUESTIONS", Data = new { available, requested }
@@ -112,7 +122,7 @@ public class PracticeController : ControllerBase
             deadlineUtc = Utc(row.DeadlineUtc), serverNow = DateTime.UtcNow, durationMinutes = DurationOf(row),
             criteria = JsonSerializer.Deserialize<JsonElement>(row.CriteriaJson),
             // Không có đáp án đúng, điểm hay lời giải trong DTO làm bài
-            questions = AttemptSnapshotFactory.ForStudent(snapshot), answers = draft,
+            questions = AttemptSnapshotFactory.ForStudent(snapshot, MediaUrlFactory.For(_media, row.UserId)), answers = draft,
             // To-be T6: chỉ câu đã chốt mới có đáp án đúng + lời giải
             @checked = PracticeCheck.Results(snapshot, draft, Checked(row))
         };
@@ -200,8 +210,10 @@ public class PracticeController : ControllerBase
         var pool = await PoolAsync(criteria);
         if (pool.Count < criteria.QuestionCount) { await tx.CommitAsync(); return NotEnough(pool.Count, criteria.QuestionCount); }
         var picked = PracticeSnapshotFactory.Pick(pool, criteria.QuestionCount, Random.Shared);
+        await AttachMediaAsync(picked);
         var row = NewSession(userId.Value, criteria.SubjectId, criteria.RevealMode, criteria.Kind, criteria.DurationMinutes, criteria, null, picked);
         _db.PracticeSessions.Add(row);
+        await MediaReferenceWriter.AddFromJsonAsync(_db, "practice", row.Id, row.SnapshotJson);   // To-be T15
         await _db.SaveChangesAsync(); await tx.CommitAsync();
         return StatusCode(201, ApiResponse<object>.Ok(await StateAsync(row)));
     }
@@ -366,7 +378,8 @@ public class PracticeController : ControllerBase
                 id = question.Id, questionTypeId = question.QuestionTypeId, content = question.Content,
                 selectedAnswerIds = picked, isCorrect = picked.Count > 0 && picked.ToHashSet().SetEquals(correct),
                 options = question.Options.Select(option => new { id = option.Id, content = option.Content, isCorrect = option.IsCorrect }).ToList(),
-                explanation = question.Explanation
+                explanation = question.Explanation,
+                media = AttemptSnapshotFactory.MediaFor(question, MediaUrlFactory.For(_media, row.UserId))   // To-be T15
             };
         }).ToList();
         return Ok(ApiResponse<object>.Ok(new
@@ -394,7 +407,7 @@ public class PracticeController : ControllerBase
         await FinalizeExpiredOfUserAsync(userId.Value);
         if (await OpenLimitAsync(userId.Value, source.Kind) is { } limited) { await tx.CommitAsync(); return limited; }
         var sourceIds = Snapshot(source).Questions.Select(x => x.SourceQuestionId).Distinct().ToList();
-        var pool = (await _db.Questions.AsNoTracking().Include(x => x.Answers).Include(x => x.QuestionTags).Where(x => sourceIds.Contains(x.Id))
+        var pool = (await _db.Questions.AsNoTracking().Include(x => x.Answers).Include(x => x.QuestionTags).Include(x => x.QuestionMedia).ThenInclude(x => x.Media).Where(x => sourceIds.Contains(x.Id))
                 .AsSplitQuery().ToListAsync())
             .Where(x => PracticeSnapshotFactory.IsUsable(x, source.SubjectId)).ToList();
         if (pool.Count == 0) { await tx.CommitAsync(); return NotEnough(0, sourceIds.Count); }
@@ -403,6 +416,7 @@ public class PracticeController : ControllerBase
             source.Kind == PracticeSnapshotFactory.KindMock ? DurationOf(source) ?? PracticeTiming.SuggestedMinutes(picked.Count) : null,
             null, source.Id, picked);
         _db.PracticeSessions.Add(row);
+        await MediaReferenceWriter.AddFromJsonAsync(_db, "practice", row.Id, row.SnapshotJson);   // To-be T15
         await _db.SaveChangesAsync(); await tx.CommitAsync();
         return StatusCode(201, ApiResponse<object>.Ok(await StateAsync(row)));
     }
@@ -426,6 +440,8 @@ public class PracticeController : ControllerBase
         // To-be T8 (QT8-5 a): xóa luôn đánh dấu câu của phiên bị bỏ, cùng giao dịch
         await _db.ReviewFlags.Where(x => x.UserId == userId.Value && x.SourceKind == ReviewFlagRules.Practice && x.SourceId == id)
             .ExecuteDeleteAsync();
+        // To-be T15: phiên bị bỏ không còn tham chiếu media (để media có thể thành mồ côi)
+        await _db.MediaReferences.Where(x => x.SourceKind == "practice" && x.SourceId == id).ExecuteDeleteAsync();
         await tx.CommitAsync();
         return Ok(ApiResponse<object>.Ok(new { id }));
     }
