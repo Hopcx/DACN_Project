@@ -21,8 +21,7 @@ public class QuestionImportController : ControllerBase
 {
     private const int MaxBytes = 2 * 1024 * 1024;
     private const int MaxRows = 500;
-    private static readonly string[] Headers =
-        ["SubjectId", "QuestionLevelId", "QuestionTypeId", "Content", "Answers", "CorrectIndexes"];
+    private static readonly string[] Headers = QuestionWorkbook.Headers;
     private readonly ProjectDACNDbContext _db;
     public QuestionImportController(ProjectDACNDbContext db) => _db = db;
 
@@ -54,23 +53,32 @@ public class QuestionImportController : ControllerBase
         foreach (var row in rows)
         {
             if (row.Values.Length != Headers.Length)
-            { errors.Add(new(row.Number, "header", "COLUMN_COUNT", "Cần đúng sáu cột")); continue; }
+            { errors.Add(new(row.Number, "header", "COLUMN_COUNT", "Cần sáu cột (cột thứ bảy ShortAnswerOptions tùy chọn)")); continue; }
             if (!int.TryParse(row.Values[0], out var subjectId) || subjectId <= 0)
                 errors.Add(new(row.Number, "A", "SUBJECT_ID", "SubjectId phải là ID dương"));
             if (!int.TryParse(row.Values[1], out var levelId) || levelId <= 0)
                 errors.Add(new(row.Number, "B", "LEVEL_ID", "QuestionLevelId phải là ID dương"));
-            if (!int.TryParse(row.Values[2], out var typeId) || typeId is < 1 or > 3)
-                errors.Add(new(row.Number, "C", "TYPE_ID", "QuestionTypeId chỉ nhận 1, 2, 3"));
+            if (!int.TryParse(row.Values[2], out var typeId) || typeId is < 1 or > ShortAnswerMatcher.QuestionTypeId)
+                errors.Add(new(row.Number, "C", "TYPE_ID", "QuestionTypeId chỉ nhận 1, 2, 3, 4"));
+            var isShort = typeId == ShortAnswerMatcher.QuestionTypeId;
             var content = row.Values[3].Trim();
             if (content.Length is < 1 or > 4000)
                 errors.Add(new(row.Number, "D", "CONTENT", "Nội dung cần 1–4000 ký tự"));
             var answers = row.Values[4].Split(';', StringSplitOptions.TrimEntries);
-            if (answers.Length is < 2 or > 20 || answers.Any(x => x.Length is < 1 or > 2000))
-                errors.Add(new(row.Number, "E", "ANSWERS", "Cần 2–20 đáp án, ngăn bởi dấu chấm phẩy"));
-            var indexes = row.Values[5].Split(',', StringSplitOptions.TrimEntries);
-            if (indexes.Length == 0 || indexes.Any(x => !int.TryParse(x, out var n) || n < 1 || n > answers.Length) ||
-                indexes.Distinct().Count() != indexes.Length)
-                errors.Add(new(row.Number, "F", "CORRECT_INDEXES", "Chỉ số đáp án đúng bắt đầu từ 1, ngăn bởi dấu phẩy"));
+            if (isShort ? answers.Length is < 1 or > ShortAnswerMatcher.MaxAccepted || answers.Any(x => x.Length is < 1 or > ShortAnswerMatcher.MaxTextLength)
+                        : answers.Length is < 2 or > 20 || answers.Any(x => x.Length is < 1 or > 2000))
+                errors.Add(new(row.Number, "E", "ANSWERS", isShort ? "Câu điền ngắn cần 1–10 đáp án chấp nhận (mỗi đáp án 1–200 ký tự), ngăn bởi dấu chấm phẩy"
+                    : "Cần 2–20 đáp án, ngăn bởi dấu chấm phẩy"));
+            // To-be T16: câu điền ngắn để trống CorrectIndexes (mọi đáp án là đáp án chấp nhận)
+            var indexes = isShort ? [] : row.Values[5].Split(',', StringSplitOptions.TrimEntries);
+            if (isShort ? row.Values[5].Length > 0
+                : indexes.Length == 0 || indexes.Any(x => !int.TryParse(x, out var n) || n < 1 || n > answers.Length) ||
+                  indexes.Distinct().Count() != indexes.Length)
+                errors.Add(new(row.Number, "F", "CORRECT_INDEXES", isShort ? "Câu điền ngắn để trống CorrectIndexes"
+                    : "Chỉ số đáp án đúng bắt đầu từ 1, ngăn bởi dấu phẩy"));
+            var options = ShortAnswerOptions.Parse(row.Values[6]);
+            if (options.Error != null || (!isShort && row.Values[6].Length > 0))
+                errors.Add(new(row.Number, "G", "SHORT_ANSWER_OPTIONS", options.Error ?? "ShortAnswerOptions chỉ dùng cho câu loại 4"));
             if (!seen.Add($"{subjectId}:{content}"))
                 errors.Add(new(row.Number, "D", "DUPLICATE_FILE", "Câu hỏi trùng trong file"));
             if (errors.Any(x => x.Row == row.Number)) continue;
@@ -78,7 +86,12 @@ public class QuestionImportController : ControllerBase
             var dto = new QuestionCreateDto { SubjectId = subjectId, QuestionLevelId = levelId,
                 QuestionTypeId = typeId, Content = content, Status = 1,
                 Answers = answers.Select((answer, i) => new QuestionAnswerInputDto
-                { Content = answer, IsCorrect = correct.Contains(i + 1) }).ToList() };
+                { Content = answer, IsCorrect = isShort || correct.Contains(i + 1) }).ToList() };
+            if (isShort)
+            {
+                dto.ShortAnswerIgnoreDiacritics = options.IgnoreDiacritics; dto.ShortAnswerNumeric = options.Numeric;
+                dto.ShortAnswerTolerance = options.Numeric ? options.Tolerance : null;
+            }
             try { QuestionService.Validate(dto); }
             catch (BadRequestException ex) { errors.Add(new(row.Number, "E/F", "INVALID_ANSWERS", ex.Message)); }
             parsed.Add((row.Number, dto));
@@ -106,6 +119,9 @@ public class QuestionImportController : ControllerBase
             _db.Questions.Add(new Question { SubjectId = dto.SubjectId, QuestionLevelId = dto.QuestionLevelId,
                 QuestionTypeId = dto.QuestionTypeId, Content = dto.Content, Status = 1,
                 CreatedDate = now, CreatedAt = now,
+                ShortAnswerIgnoreDiacritics = dto.QuestionTypeId == ShortAnswerMatcher.QuestionTypeId ? dto.ShortAnswerIgnoreDiacritics == true : null,
+                ShortAnswerNumeric = dto.QuestionTypeId == ShortAnswerMatcher.QuestionTypeId ? dto.ShortAnswerNumeric == true : null,
+                ShortAnswerTolerance = dto.QuestionTypeId == ShortAnswerMatcher.QuestionTypeId && dto.ShortAnswerNumeric == true ? dto.ShortAnswerTolerance ?? 0 : null,
                 Answers = dto.Answers.Select(x => new Answer
                 { Content = x.Content, IsCorrect = x.IsCorrect, Status = 1 }).ToList() });
         await _db.SaveChangesAsync();
@@ -119,6 +135,9 @@ public record WorkbookRow(int Number, string[] Values);
 
 public static class QuestionWorkbook
 {
+    // v1: 6 cột; To-be T16 thêm cột G "ShortAnswerOptions" (tùy chọn — file 6 cột cũ vẫn đọc được)
+    public static readonly string[] Headers =
+        ["SubjectId", "QuestionLevelId", "QuestionTypeId", "Content", "Answers", "CorrectIndexes", "ShortAnswerOptions"];
     private static readonly XNamespace S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private const string Sheet = "xl/worksheets/sheet1.xml";
     public static List<WorkbookRow> Read(Stream stream, int maxRows)
@@ -152,12 +171,12 @@ public static class QuestionWorkbook
                 throw new InvalidDataException("File cần dòng tiêu đề và tối đa 500 dòng dữ liệu");
             string[] Cells(XElement row)
             {
-                var result = Enumerable.Repeat(string.Empty, 6).ToArray();
+                var result = Enumerable.Repeat(string.Empty, Headers.Length).ToArray();
                 foreach (var cell in row.Elements(S + "c"))
                 {
                     var reference = cell.Attribute("r")?.Value ?? "";
                     var column = new string(reference.TakeWhile(char.IsLetter).ToArray());
-                    var index = "ABCDEF".IndexOf(column, StringComparison.Ordinal);
+                    var index = "ABCDEFG".IndexOf(column, StringComparison.Ordinal);
                     if (column.Length != 1 || index < 0 || cell.Element(S + "f") != null)
                         throw new InvalidDataException($"Cột hoặc công thức không hợp lệ tại {reference}");
                     var type = cell.Attribute("t")?.Value;
@@ -170,7 +189,7 @@ public static class QuestionWorkbook
                 return result;
             }
             var header = Cells(rows[0]);
-            if (!header.SequenceEqual(new[] { "SubjectId", "QuestionLevelId", "QuestionTypeId", "Content", "Answers", "CorrectIndexes" }))
+            if (!header.Take(6).SequenceEqual(Headers.Take(6)) || (header[6].Length > 0 && header[6] != Headers[6]))
                 throw new InvalidDataException("Tiêu đề cột không đúng phiên bản v1");
             return rows.Skip(1).Select((row, i) => new WorkbookRow(
                 int.TryParse(row.Attribute("r")?.Value, out var n) ? n : i + 2, Cells(row))).ToList();
@@ -193,7 +212,7 @@ public static class QuestionWorkbook
             Entry("_rels/.rels", """<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>""");
             Entry("xl/workbook.xml", """<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Questions" sheetId="1" r:id="rId1"/></sheets></workbook>""");
             Entry("xl/_rels/workbook.xml.rels", """<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>""");
-            var headers = new[] { "SubjectId", "QuestionLevelId", "QuestionTypeId", "Content", "Answers", "CorrectIndexes" };
+            var headers = Headers;
             var cells = string.Concat(headers.Select((value, i) => $"<c r=\"{(char)('A' + i)}1\" t=\"inlineStr\"><is><t>{value}</t></is></c>"));
             Entry(Sheet, $"<worksheet xmlns=\"{S}\"><sheetData><row r=\"1\">{cells}</row></sheetData></worksheet>");
         }
@@ -204,17 +223,19 @@ public static class QuestionWorkbook
     // và chuỗi bắt đầu bằng = + - @ vẫn chỉ là text. XML dựng bằng XElement để tự escape.
     public static byte[] Write(IEnumerable<string[]> dataRows)
     {
-        var headers = new[] { "SubjectId", "QuestionLevelId", "QuestionTypeId", "Content", "Answers", "CorrectIndexes" };
+        var headers = Headers;
         XElement Cell(char column, int row, string value) =>
             new(S + "c", new XAttribute("r", $"{column}{row}"), new XAttribute("t", "inlineStr"),
                 new XElement(S + "is", new XElement(S + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), value)));
         var sheetData = new XElement(S + "sheetData",
             new XElement(S + "row", new XAttribute("r", 1), headers.Select((value, i) => Cell((char)('A' + i), 1, value))));
         var number = 2;
-        foreach (var values in dataRows)
+        foreach (var row in dataRows)
         {
+            // T16: dòng 6 giá trị (định dạng v1 cũ) được thêm cột G trống
+            var values = row.Length == headers.Length - 1 ? [.. row, ""] : row;
             if (values.Length != headers.Length)
-                throw new ArgumentException("Mỗi dòng dữ liệu cần đúng sáu giá trị", nameof(dataRows));
+                throw new ArgumentException("Mỗi dòng dữ liệu cần sáu hoặc bảy giá trị", nameof(dataRows));
             var rowNumber = number++;
             sheetData.Add(new XElement(S + "row", new XAttribute("r", rowNumber),
                 values.Select((value, i) => Cell((char)('A' + i), rowNumber, value))));
@@ -235,5 +256,41 @@ public static class QuestionWorkbook
             Entry(Sheet, sheetXml);
         }
         return output.ToArray();
+    }
+}
+
+/// <summary>
+/// To-be T16 (QT16-4): cột G "ShortAnswerOptions" của câu điền ngắn — các mục ngăn bởi dấu chấm phẩy:
+/// "nodiacritics" (bỏ dấu), "numeric" hoặc "numeric=&lt;sai số&gt;" (so số; sai số dùng dấu chấm, 0–1e9, ≤ 6 chữ số thập phân).
+/// </summary>
+public static class ShortAnswerOptions
+{
+    public sealed record Parsed(bool IgnoreDiacritics, bool Numeric, decimal Tolerance, string? Error);
+
+    public static Parsed Parse(string? value)
+    {
+        bool ignore = false, numeric = false; decimal tolerance = 0;
+        foreach (var raw in (value ?? "").Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            var item = raw.ToLowerInvariant();
+            if (item == "nodiacritics" && !ignore) { ignore = true; continue; }
+            if (!numeric && item == "numeric") { numeric = true; continue; }
+            if (!numeric && item.StartsWith("numeric=", StringComparison.Ordinal) &&
+                decimal.TryParse(item["numeric=".Length..], System.Globalization.NumberStyles.AllowDecimalPoint,
+                    System.Globalization.CultureInfo.InvariantCulture, out var t) &&
+                t >= 0 && t <= ShortAnswerMatcher.MaxTolerance && decimal.Round(t, 6) == t)
+            { numeric = true; tolerance = t; continue; }
+            return new(false, false, 0, $"Mục không hợp lệ hoặc lặp: \"{raw}\" (dùng nodiacritics; numeric hoặc numeric=0.01)");
+        }
+        return new(ignore, numeric, tolerance, null);
+    }
+
+    public static string Format(bool? ignoreDiacritics, bool? numeric, decimal? tolerance)
+    {
+        var items = new List<string>();
+        if (ignoreDiacritics == true) items.Add("nodiacritics");
+        if (numeric == true) items.Add((tolerance ?? 0) == 0 ? "numeric"
+            : "numeric=" + tolerance!.Value.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture));
+        return string.Join(";", items);
     }
 }

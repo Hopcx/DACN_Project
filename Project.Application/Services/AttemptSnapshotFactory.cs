@@ -30,18 +30,24 @@ public static class AttemptSnapshotFactory
         return new AttemptSnapshot(AttemptSnapshot.CurrentVersion, exam.Id, variant.Id, exam.Name, variant.Code, questions.AsReadOnly());
     }
 
-    // Dùng chung cho Exam và Practice (To-be T5): câu hoạt động, loại 1–3, có nội dung.
+    // Dùng chung cho Exam và Practice (To-be T5): câu hoạt động, loại 1–4 (T16: 4 = điền ngắn), có nội dung.
     public static bool QuestionShapeValid(Question question) =>
-        question.Id > 0 && question.Status == 1 && question.QuestionTypeId is >= 1 and <= 3 &&
+        question.Id > 0 && question.Status == 1 && question.QuestionTypeId is >= 1 and <= ShortAnswerMatcher.QuestionTypeId &&
         !string.IsNullOrWhiteSpace(question.Content);
 
     // Đáp án hoạt động: ≥ 2, không trùng, có nội dung; Đúng/Sai đúng 2; loại 1–2 đúng một đáp án đúng; loại 3 ≥ 1.
+    // T16: loại 4 = 1–10 đáp án chấp nhận, tất cả IsCorrect, mỗi đáp án ≤ 200 ký tự; sai số ≥ 0.
     public static bool AnswerSetValid(Question question)
     {
         var answers = question.Answers.Where(x => x.Status == 1).ToArray();
         var correct = answers.Count(x => x.IsCorrect);
-        return answers.Length >= 2 && answers.Select(x => x.Id).Distinct().Count() == answers.Length &&
-            !answers.Any(x => x.Id <= 0 || x.QuestionId != question.Id || string.IsNullOrWhiteSpace(x.Content)) &&
+        var common = answers.Select(x => x.Id).Distinct().Count() == answers.Length &&
+            !answers.Any(x => x.Id <= 0 || x.QuestionId != question.Id || string.IsNullOrWhiteSpace(x.Content));
+        if (question.QuestionTypeId == ShortAnswerMatcher.QuestionTypeId)
+            return common && answers.Length is >= 1 and <= ShortAnswerMatcher.MaxAccepted && correct == answers.Length &&
+                answers.All(x => x.Content.Trim().Length <= ShortAnswerMatcher.MaxTextLength) &&
+                (question.ShortAnswerTolerance ?? 0) is >= 0 and <= ShortAnswerMatcher.MaxTolerance;
+        return answers.Length >= 2 && common &&
             !(question.QuestionTypeId == 1 && answers.Length != 2) &&
             !(question.QuestionTypeId is 1 or 2 && correct != 1) && correct != 0;
     }
@@ -55,13 +61,20 @@ public static class AttemptSnapshotFactory
             question.ChapterId, Array.AsReadOnly(question.QuestionTags.Select(x => x.TagId).Distinct().OrderBy(x => x).ToArray()),
             // v4 (T15): media đang gắn và còn hoạt động, theo thứ tự; người gọi phải Include(QuestionMedia).ThenInclude(Media)
             Array.AsReadOnly(question.QuestionMedia.Where(x => x.Media != null && x.Media.Status == 1).OrderBy(x => x.SortOrder)
-                .Select(x => new AttemptMediaSnapshot(x.MediaId, x.Media.Kind, x.Media.Width, x.Media.Height)).ToArray()));
+                .Select(x => new AttemptMediaSnapshot(x.MediaId, x.Media.Kind, x.Media.Width, x.Media.Height)).ToArray()),
+            // v5 (T16): quy tắc so khớp của câu điền ngắn
+            question.QuestionTypeId == ShortAnswerMatcher.QuestionTypeId
+                ? new AttemptShortAnswerSnapshot(question.ShortAnswerIgnoreDiacritics == true, question.ShortAnswerNumeric == true,
+                    question.ShortAnswerNumeric == true ? question.ShortAnswerTolerance ?? 0 : 0)
+                : null);
 
     // To-be T15: mediaUrl ký URL cho đúng học viên đang xem; null → không cấp URL (media rỗng).
+    // To-be T16: câu điền ngắn không có lựa chọn — Options là đáp án chấp nhận nên KHÔNG BAO GIỜ trả cho học viên ở đây.
     public static IReadOnlyList<AttemptQuestionDto> ForStudent(AttemptSnapshot snapshot, Func<Guid, string>? mediaUrl = null) =>
         Array.AsReadOnly(snapshot.Questions.Select(question => new AttemptQuestionDto(
             question.Id, question.QuestionTypeId, question.Content,
-            Array.AsReadOnly(question.Options.Select(option => new AttemptOptionDto(option.Id, option.Content)).ToArray()),
+            AnswerGrading.IsShortAnswer(question) ? Array.Empty<AttemptOptionDto>()
+                : Array.AsReadOnly(question.Options.Select(option => new AttemptOptionDto(option.Id, option.Content)).ToArray()),
             MediaFor(question, mediaUrl))).ToArray());
 
     public static IReadOnlyList<AttemptMediaDto> MediaFor(AttemptQuestionSnapshot question, Func<Guid, string>? mediaUrl) =>
@@ -70,6 +83,7 @@ public static class AttemptSnapshotFactory
 
     // Full replacement: omitted questions become unanswered. Validate all input before
     // returning a canonical, detached draft; the future store owns revision and transaction.
+    // To-be T16: loại 4 chỉ nhận Text (≤ 200 ký tự sau trim, không chọn đáp án); loại 1–3 không nhận Text.
     public static IReadOnlyList<AttemptAnswerDto> ValidateDraft(AttemptSnapshot snapshot,
         IReadOnlyList<AttemptAnswerDto>? answers)
     {
@@ -80,15 +94,29 @@ public static class AttemptSnapshotFactory
         var questions = snapshot.Questions.ToDictionary(x => x.Id);
         foreach (var answer in answers)
         {
-            if (!questions.TryGetValue(answer.QuestionId, out var question) ||
+            if (!questions.TryGetValue(answer.QuestionId, out var question))
+                throw new ArgumentException("Câu hỏi hoặc đáp án không thuộc lượt thi, bị trùng hoặc chọn quá số lượng.");
+            if (AnswerGrading.IsShortAnswer(question))
+            {
+                if (answer.SelectedAnswerIds.Count > 0 || (answer.Text?.Trim().Length ?? 0) > ShortAnswerMatcher.MaxTextLength)
+                    throw new ArgumentException($"Câu điền ngắn chỉ nhận câu trả lời tối đa {ShortAnswerMatcher.MaxTextLength} ký tự.");
+                continue;
+            }
+            if (!string.IsNullOrEmpty(answer.Text) ||
                 answer.SelectedAnswerIds.Distinct().Count() != answer.SelectedAnswerIds.Count ||
                 answer.SelectedAnswerIds.Any(id => !question.Options.Any(option => option.Id == id)) ||
                 (question.QuestionTypeId is 1 or 2 && answer.SelectedAnswerIds.Count > 1))
                 throw new ArgumentException("Câu hỏi hoặc đáp án không thuộc lượt thi, bị trùng hoặc chọn quá số lượng.");
         }
         var incoming = answers.ToDictionary(x => x.QuestionId);
-        return Array.AsReadOnly(snapshot.Questions.Select(question => new AttemptAnswerDto(question.Id,
-            Array.AsReadOnly(question.Options.Where(option => incoming.TryGetValue(question.Id, out var answer) &&
-                answer.SelectedAnswerIds.Contains(option.Id)).Select(option => option.Id).ToArray()))).ToArray());
+        return Array.AsReadOnly(snapshot.Questions.Select(question =>
+        {
+            incoming.TryGetValue(question.Id, out var answer);
+            if (AnswerGrading.IsShortAnswer(question))
+                return new AttemptAnswerDto(question.Id, Array.Empty<Guid>(),
+                    string.IsNullOrWhiteSpace(answer?.Text) ? null : answer.Text.Trim());
+            return new AttemptAnswerDto(question.Id, Array.AsReadOnly(question.Options.Where(option => answer != null &&
+                answer.SelectedAnswerIds.Contains(option.Id)).Select(option => option.Id).ToArray()));
+        }).ToArray());
     }
 }

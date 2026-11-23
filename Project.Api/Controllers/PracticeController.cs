@@ -18,7 +18,8 @@ public sealed record CreatePracticeRequest(int SubjectId, List<int>? ChapterIds,
     List<int>? TagIds, int QuestionCount, string? RevealMode, string? Kind = null, int? DurationMinutes = null);
 public sealed record PracticeSaveRequest(int Revision, IReadOnlyList<AttemptAnswerDto>? Answers);
 public sealed record PracticeFinishRequest(int Revision);
-public sealed record PracticeCheckRequest(int Revision, IReadOnlyList<Guid>? SelectedAnswerIds);
+// To-be T16: Text = bài làm câu điền ngắn (loại 4)
+public sealed record PracticeCheckRequest(int Revision, IReadOnlyList<Guid>? SelectedAnswerIds, string? Text = null);
 
 /// <summary>
 /// To-be T5: Luyện tập của học viên. Chỉ môn của lớp đã được duyệt (Q18); chỉ chủ phiên thấy phiên (người khác 404).
@@ -78,7 +79,7 @@ public class PracticeController : ControllerBase
     private async Task<List<Question>> PoolAsync(PracticeSnapshotFactory.Criteria criteria)
     {
         var query = _db.Questions.AsNoTracking().Include(x => x.Answers).Include(x => x.QuestionTags)
-            .Where(x => x.SubjectId == criteria.SubjectId && x.Status == 1 && x.QuestionTypeId >= 1 && x.QuestionTypeId <= 3);
+            .Where(x => x.SubjectId == criteria.SubjectId && x.Status == 1 && x.QuestionTypeId >= 1 && x.QuestionTypeId <= ShortAnswerMatcher.QuestionTypeId);
         if (criteria.ChapterIds.Count > 0)
             query = query.Where(x => x.ChapterId != null && criteria.ChapterIds.Contains(x.ChapterId.Value));
         if (criteria.QuestionLevelIds.Count > 0)
@@ -136,7 +137,7 @@ public class PracticeController : ControllerBase
             .Select(x => new { x.Id, x.Name }).ToListAsync();
         var subjectIds = subjects.Select(x => x.Id).ToList();
         var questions = (await _db.Questions.AsNoTracking().Include(x => x.Answers).Include(x => x.QuestionTags)
-                .Where(x => subjectIds.Contains(x.SubjectId) && x.Status == 1 && x.QuestionTypeId >= 1 && x.QuestionTypeId <= 3)
+                .Where(x => subjectIds.Contains(x.SubjectId) && x.Status == 1 && x.QuestionTypeId >= 1 && x.QuestionTypeId <= ShortAnswerMatcher.QuestionTypeId)
                 .AsSplitQuery().ToListAsync())
             .Where(x => PracticeSnapshotFactory.IsUsable(x, x.SubjectId)).ToList();
         var chapters = await _db.Chapters.AsNoTracking().Where(x => subjectIds.Contains(x.SubjectId) && x.Status == 1)
@@ -344,21 +345,21 @@ public class PracticeController : ControllerBase
         var checkedIds = Checked(row);
         if (checkedIds.Contains(questionId))
         {
-            var previous = Draft(row).FirstOrDefault(x => x.QuestionId == questionId)?.SelectedAnswerIds ?? Array.Empty<Guid>();
+            var previous = Draft(row).FirstOrDefault(x => x.QuestionId == questionId) ?? new AttemptAnswerDto(questionId, Array.Empty<Guid>());
             await tx.CommitAsync();
             return Ok(ApiResponse<object>.Ok(new { result = PracticeCheck.Result(question, previous), revision = row.Revision }));
         }
         if (row.State != "inProgress") return Deny("PRACTICE_CLOSED");
         if (request.Revision != row.Revision) return Deny("CONCURRENCY_CONFLICT");
         IReadOnlyList<AttemptAnswerDto> draft; IReadOnlyList<Guid> nextChecked;
-        try { (draft, nextChecked) = PracticeCheck.Apply(snapshot, Draft(row), checkedIds, questionId, request.SelectedAnswerIds); }
+        try { (draft, nextChecked) = PracticeCheck.Apply(snapshot, Draft(row), checkedIds, questionId, request.SelectedAnswerIds, request.Text); }
         catch (ArgumentException) { return BadRequest(ApiResponse<string>.Fail("INVALID_SELECTION")); }
         row.DraftJson = JsonSerializer.Serialize(draft, Json);
         row.CheckedJson = JsonSerializer.Serialize(nextChecked, Json);
         row.Revision++;
         await _db.SaveChangesAsync(); await tx.CommitAsync();
-        var selected = draft.First(x => x.QuestionId == questionId).SelectedAnswerIds;
-        return Ok(ApiResponse<object>.Ok(new { result = PracticeCheck.Result(question, selected), revision = row.Revision }));
+        var answered = draft.First(x => x.QuestionId == questionId);
+        return Ok(ApiResponse<object>.Ok(new { result = PracticeCheck.Result(question, answered), revision = row.Revision }));
     }
 
     [HttpGet("{id:guid}/review")]
@@ -368,16 +369,19 @@ public class PracticeController : ControllerBase
         var row = await OwnedFinalizedAsync(id, userId.Value);
         if (row == null) return NotFound(ApiResponse<string>.Fail(NotFoundCode));
         if (row.State != "finished") return Deny("PRACTICE_NOT_FINISHED");
-        var selected = Draft(row).ToDictionary(x => x.QuestionId, x => x.SelectedAnswerIds);
+        var byQuestion = Draft(row).ToDictionary(x => x.QuestionId);
         var questions = Snapshot(row).Questions.Select(question =>
         {
-            var picked = selected.TryGetValue(question.Id, out var ids) ? ids : Array.Empty<Guid>();
-            var correct = question.Options.Where(x => x.IsCorrect).Select(x => x.Id).ToHashSet();
+            var answer = byQuestion.GetValueOrDefault(question.Id) ?? new AttemptAnswerDto(question.Id, Array.Empty<Guid>());
+            var shortAnswer = AnswerGrading.IsShortAnswer(question);
             return new
             {
                 id = question.Id, questionTypeId = question.QuestionTypeId, content = question.Content,
-                selectedAnswerIds = picked, isCorrect = picked.Count > 0 && picked.ToHashSet().SetEquals(correct),
-                options = question.Options.Select(option => new { id = option.Id, content = option.Content, isCorrect = option.IsCorrect }).ToList(),
+                // To-be T16: cùng hàm chấm với điểm; câu điền ngắn trả bài làm + đáp án chấp nhận, không có lựa chọn
+                selectedAnswerIds = answer.SelectedAnswerIds, isCorrect = AnswerGrading.IsCorrect(question, answer),
+                text = shortAnswer ? answer.Text : null,
+                acceptedAnswers = shortAnswer ? AnswerGrading.AcceptedAnswers(question) : null,
+                options = question.Options.Where(_ => !shortAnswer).Select(option => new { id = option.Id, content = option.Content, isCorrect = option.IsCorrect }).ToList(),
                 explanation = question.Explanation,
                 media = AttemptSnapshotFactory.MediaFor(question, MediaUrlFactory.For(_media, row.UserId))   // To-be T15
             };

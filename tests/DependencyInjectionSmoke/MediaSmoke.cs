@@ -132,7 +132,7 @@ internal static class MediaSmoke
         var json = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
         var snap = new Project.Domain.ValueObjects.AttemptSnapshot(Project.Domain.ValueObjects.AttemptSnapshot.CurrentVersion, 1, 1, "E", "V", [built]);
         var back = System.Text.Json.JsonSerializer.Deserialize<Project.Domain.ValueObjects.AttemptSnapshot>(System.Text.Json.JsonSerializer.Serialize(snap, json), json)!;
-        Check(back.Version == 4 && back.Questions[0].Media!.Count == 2, "v4 JSON round-trips media.");
+        Check(back.Version == Project.Domain.ValueObjects.AttemptSnapshot.CurrentVersion && back.Questions[0].Media!.Count == 2, "v4+ JSON round-trips media.");
         var v3 = System.Text.Json.JsonSerializer.Deserialize<Project.Domain.ValueObjects.AttemptSnapshot>(
             """{"version":3,"examId":1,"examDetailId":1,"examName":"E","variantCode":"V","questions":[{"id":"00000000-0000-0000-0000-000000000001","sourceQuestionId":5,"questionTypeId":2,"content":"Q","point":1,"options":[],"chapterId":2,"tagIds":[1]}]}""", json)!;
         Check(v3.Questions[0].Media == null && AttemptSnapshotFactory.ForStudent(v3, _ => "x")[0].Media!.Count == 0, "v3 (no media) still reads; no media for students.");

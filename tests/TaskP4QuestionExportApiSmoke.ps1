@@ -62,7 +62,7 @@ function ReadBook([byte[]]$bytes) {
         return @{ sheet = $sheetName; rows = $rows; hasFormula = [bool]($texts['xl/worksheets/sheet1.xml'] -match '<f[ >]'); all = ($texts.Values -join "`n") }
     } finally { $zip.Dispose() }
 }
-$sheetHeader = @('SubjectId', 'QuestionLevelId', 'QuestionTypeId', 'Content', 'Answers', 'CorrectIndexes')
+$sheetHeader = @('SubjectId', 'QuestionLevelId', 'QuestionTypeId', 'Content', 'Answers', 'CorrectIndexes', 'ShortAnswerOptions')   # T16: thêm cột G tùy chọn
 
 $seed = [Guid]::Empty; $admin = [Guid]::NewGuid(); $teacher = [Guid]::NewGuid(); $examiner = [Guid]::NewGuid(); $noPerm = [Guid]::NewGuid()
 $subject = 0; $subjectBig = 0; $empty = 0; $levelId = 0; $mail = $null

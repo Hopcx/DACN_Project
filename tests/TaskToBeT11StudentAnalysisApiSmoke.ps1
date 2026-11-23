@@ -95,7 +95,7 @@ SELECT CONCAT(@s,',',@exam,',',@schedule,',',@c1,',',@c2);
     $start = Call 'POST' "/web/exam-schedules/$schedule/attempts" $token
     Expect $start.status 200 'start exam'
     $attempt = $start.body.data.attemptId
-    Expect (Sql "SELECT JSON_VALUE(SnapshotJson,'$.version') FROM dbo.ExamAttempts WHERE Id='$attempt';") '4' 'snapshot v4 (T15; chương/tag từ v3)'
+    Expect (Sql "SELECT JSON_VALUE(SnapshotJson,'$.version') FROM dbo.ExamAttempts WHERE Id='$attempt';") '5' 'snapshot v5 (T16; chương/tag từ v3)'
     Expect (Sql "SELECT COUNT(*) FROM dbo.ExamAttempts a CROSS APPLY OPENJSON(a.SnapshotJson,'$.questions') WITH (chapterId int '$.chapterId', tagIds nvarchar(max) '$.tagIds' AS JSON) q WHERE a.Id='$attempt' AND q.chapterId IS NOT NULL AND q.tagIds LIKE '[[]%]' AND q.tagIds <> '[]';") '6' 'snapshot carries chapter + tags'
     $plan = @{ '1' = 'ok'; '2' = 'ok'; '3' = 'ok'; '4' = 'ok'; '5' = 'no'; '6' = 'blank' }
     $save = Call 'PUT' "/web/attempts/$attempt/answers" $token @{ revision = $start.body.data.revision; answers = (Answers $start.body.data.questions $plan) }

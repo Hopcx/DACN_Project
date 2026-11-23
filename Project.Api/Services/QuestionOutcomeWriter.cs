@@ -40,6 +40,7 @@ public static class QuestionOutcomeWriter
             SubjectId = subjectId, ExamScheduleId = examScheduleId, SourceQuestionId = r.SourceQuestionId,
             ChapterId = r.ChapterId, TagIdsJson = JsonSerializer.Serialize(r.TagIds), IsCorrect = r.IsCorrect,
             IsAnswered = r.IsAnswered, SelectedAnswerIdsJson = JsonSerializer.Serialize(r.SelectedSourceAnswerIds),
+            AnswerText = r.AnswerText,   // To-be T16 (đã giới hạn 200 ký tự trong ShortAnswerMatcher.StatsKey)
             FinishedAtUtc = finished, ClassificationSource = r.FromSnapshot ? "snapshot" : "current"
         }));
         return results.Count;

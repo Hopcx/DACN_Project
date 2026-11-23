@@ -1211,6 +1211,16 @@ namespace Project.Infrastructure.Migrations
                     b.Property<int>("QuestionTypeId")
                         .HasColumnType("int");
 
+                    b.Property<bool?>("ShortAnswerIgnoreDiacritics")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("ShortAnswerNumeric")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("ShortAnswerTolerance")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
                     b.Property<byte?>("Status")
                         .HasColumnType("tinyint");
 
@@ -1231,7 +1241,10 @@ namespace Project.Infrastructure.Migrations
 
                     b.HasIndex("QuestionTypeId");
 
-                    b.ToTable("Questions");
+                    b.ToTable("Questions", t =>
+                        {
+                            t.HasCheckConstraint("CK_Questions_ShortAnswerTolerance", "[ShortAnswerTolerance] IS NULL OR ([ShortAnswerTolerance] >= 0 AND [ShortAnswerTolerance] <= 1000000000)");
+                        });
                 });
 
             modelBuilder.Entity("Project.Domain.Entities.QuestionAnswer", b =>
@@ -1333,6 +1346,10 @@ namespace Project.Infrastructure.Migrations
 
                     b.Property<Guid>("SnapshotQuestionId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AnswerText")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<int?>("ChapterId")
                         .HasColumnType("int");

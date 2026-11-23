@@ -6,4 +6,7 @@ public sealed record AttemptQuestionDto(Guid Id, int QuestionTypeId, string Cont
     IReadOnlyList<AttemptOptionDto> Options, IReadOnlyList<AttemptMediaDto>? Media = null);
 public sealed record AttemptOptionDto(Guid Id, string Content);
 public sealed record AttemptMediaDto(Guid Id, string Kind, int? Width, int? Height, string Url);
-public sealed record AttemptAnswerDto(Guid QuestionId, IReadOnlyList<Guid> SelectedAnswerIds);
+// To-be T16: Text = bài làm câu điền ngắn (loại 4; SelectedAnswerIds rỗng); loại 1–3 không gửi Text.
+public sealed record AttemptAnswerDto(Guid QuestionId, IReadOnlyList<Guid> SelectedAnswerIds,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    string? Text = null);
