@@ -33,6 +33,10 @@ namespace Project.Domain.Entities
         public bool? ShortAnswerIgnoreDiacritics { get; set; }
         public bool? ShortAnswerNumeric { get; set; }
         public decimal? ShortAnswerTolerance { get; set; }
+        // To-be T18 (QT18-2): đoạn dùng chung — GroupId và GroupOrder cùng có hoặc cùng NULL
+        public int? GroupId { get; set; }
+        public int? GroupOrder { get; set; }
+        public virtual QuestionGroup? Group { get; set; }
 
         public Guid? CreatedBy { get; set; }
 

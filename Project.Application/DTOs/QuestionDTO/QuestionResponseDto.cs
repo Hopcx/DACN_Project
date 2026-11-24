@@ -20,6 +20,10 @@ namespace Project.Application.DTOs.QuestionDTO
         public bool? ShortAnswerIgnoreDiacritics { get; set; }
         public bool? ShortAnswerNumeric { get; set; }
         public decimal? ShortAnswerTolerance { get; set; }
+        // To-be T18: đoạn dùng chung chứa câu (null nếu câu lẻ)
+        public int? GroupId { get; set; }
+        public int? GroupOrder { get; set; }
+        public string? GroupTitle { get; set; }
         public List<QuestionAnswerResponseDto> Answers { get; set; } = new();
     }
 

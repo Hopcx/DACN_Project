@@ -27,7 +27,8 @@ public sealed class AdminMediaController : ControllerBase
     { _db = db; _storage = storage; _settings = settings; _audit = audit; }
 
     private IQueryable<Domain.Entities.MediaFile> Orphans(DateTime cutoff) => _db.MediaFiles.AsNoTracking()
-        .Where(m => m.UploadedAtUtc <= cutoff && !_db.QuestionMedia.Any(q => q.MediaId == m.Id) && !_db.MediaReferences.Any(r => r.MediaId == m.Id));
+        .Where(m => m.UploadedAtUtc <= cutoff && !_db.QuestionMedia.Any(q => q.MediaId == m.Id) && !_db.MediaReferences.Any(r => r.MediaId == m.Id) &&
+            !_db.QuestionGroupMedia.Any(g => g.MediaId == m.Id));   // T18: media của đoạn dùng chung
 
     [HttpGet("orphans")]
     public async Task<IActionResult> List([FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
@@ -62,7 +63,8 @@ public sealed class AdminMediaController : ControllerBase
         var row = await _db.MediaFiles.FromSqlInterpolated($"SELECT * FROM dbo.MediaFiles WITH (UPDLOCK, HOLDLOCK) WHERE Id = {id}")
             .FirstOrDefaultAsync(ct);
         if (row == null) return NotFound(ApiResponse<string>.Fail("MEDIA_NOT_FOUND"));
-        if (await _db.QuestionMedia.AnyAsync(x => x.MediaId == id, ct) || await _db.MediaReferences.AnyAsync(x => x.MediaId == id, ct))
+        if (await _db.QuestionMedia.AnyAsync(x => x.MediaId == id, ct) || await _db.MediaReferences.AnyAsync(x => x.MediaId == id, ct) ||
+            await _db.QuestionGroupMedia.AnyAsync(x => x.MediaId == id, ct))
             return Conflict(ApiResponse<string>.Fail("MEDIA_IN_USE"));
         if (row.UploadedAtUtc > DateTime.UtcNow - MinAge) return Conflict(ApiResponse<string>.Fail("MEDIA_TOO_RECENT"));
         _db.MediaFiles.Remove(row);

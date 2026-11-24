@@ -37,6 +37,12 @@ namespace Project.Infrastructure.Persistence.Configurations
             entity.Property(e => e.ShortAnswerTolerance).HasPrecision(18, 6);
             entity.ToTable(t => t.HasCheckConstraint("CK_Questions_ShortAnswerTolerance",
                 "[ShortAnswerTolerance] IS NULL OR ([ShortAnswerTolerance] >= 0 AND [ShortAnswerTolerance] <= 1000000000)"));
+
+            // To-be T18: đoạn dùng chung (FK Restrict) — GroupId và GroupOrder cùng có hoặc cùng NULL
+            entity.HasIndex(e => new { e.GroupId, e.GroupOrder }).HasDatabaseName("IX_Questions_Group");
+            entity.HasOne(d => d.Group).WithMany(p => p.Questions).HasForeignKey(d => d.GroupId).OnDelete(DeleteBehavior.Restrict);
+            entity.ToTable(t => t.HasCheckConstraint("CK_Questions_Group",
+                "([GroupId] IS NULL AND [GroupOrder] IS NULL) OR ([GroupId] IS NOT NULL AND [GroupOrder] IS NOT NULL)"));
         }
     }
 

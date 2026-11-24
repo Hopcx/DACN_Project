@@ -18,7 +18,9 @@ public static class MediaReferenceWriter
     /// </summary>
     public static async Task<int> AddAsync(ProjectDACNDbContext db, string kind, Guid sourceId, AttemptSnapshot snapshot, CancellationToken ct = default)
     {
-        var ids = snapshot.Questions.SelectMany(q => q.Media ?? []).Select(m => m.Id).Distinct().ToList();
+        // T18: cả media của đoạn dùng chung
+        var ids = snapshot.Questions.SelectMany(q => q.Media ?? []).Concat((snapshot.Groups ?? []).SelectMany(g => g.Media ?? []))
+            .Select(m => m.Id).Distinct().ToList();
         if (ids.Count == 0) return 0;
         var idsJson = JsonSerializer.Serialize(ids);
         var existing = await db.MediaFiles
