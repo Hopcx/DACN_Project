@@ -70,6 +70,8 @@ namespace Project.Infrastructure.Persistence
         public DbSet<MediaFile> MediaFiles { get; set; }
         public DbSet<QuestionMedia> QuestionMedia { get; set; }
         public DbSet<MediaReference> MediaReferences { get; set; }
+        public DbSet<QuestionGroup> QuestionGroups { get; set; }            // To-be T18
+        public DbSet<QuestionGroupMedia> QuestionGroupMedia { get; set; }
 
         public virtual DbSet<QuestionType> QuestionTypes { get; set; }
 

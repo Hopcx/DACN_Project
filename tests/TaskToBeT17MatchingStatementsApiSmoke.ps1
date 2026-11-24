@@ -148,7 +148,7 @@ SELECT CONCAT(@e,'|',@sc);
     if ($start.raw -match 'isCorrect|matchId|matchContent|correctItems|sourceAnswerId') { throw 'Attempt DTO leaked pairing/correctness' }
     $order = Sql "SELECT STRING_AGG(LOWER(m.value),',') WITHIN GROUP (ORDER BY CAST(m.[key] AS int)) FROM dbo.ExamAttempts a CROSS APPLY OPENJSON(a.SnapshotJson,'$.questions') q CROSS APPLY OPENJSON(q.value,'$.matchOrder') m WHERE a.Id='$attempt' AND JSON_VALUE(q.value,'$.questionTypeId')='5';"
     Expect (($rightIds -join ',').ToLowerInvariant()) $order 'right sides in snapshot MatchOrder'
-    Expect (Sql "SELECT JSON_VALUE(SnapshotJson,'$.version') FROM dbo.ExamAttempts WHERE Id='$attempt';") '6' 'snapshot v6'
+    Expect (Sql "SELECT JSON_VALUE(SnapshotJson,'$.version') FROM dbo.ExamAttempts WHERE Id='$attempt';") '7' 'snapshot v7 (T18)'
     # Đáp án đúng chỉ đọc được từ snapshot phía server (để smoke dựng bài làm đúng)
     $pairs = @{}; foreach ($kv in (Sql "SELECT STRING_AGG(CONCAT(JSON_VALUE(o.value,'$.id'),'=',JSON_VALUE(o.value,'$.matchId')),',') FROM dbo.ExamAttempts a CROSS APPLY OPENJSON(a.SnapshotJson,'$.questions') q CROSS APPLY OPENJSON(q.value,'$.options') o WHERE a.Id='$attempt' AND JSON_VALUE(q.value,'$.questionTypeId')='5';") -split ',') { $x = $kv.Split('='); $pairs[$x[0]] = $x[1] }
     $truth = @{}; foreach ($kv in (Sql "SELECT STRING_AGG(CONCAT(JSON_VALUE(o.value,'$.id'),'=',JSON_VALUE(o.value,'$.isCorrect')),',') FROM dbo.ExamAttempts a CROSS APPLY OPENJSON(a.SnapshotJson,'$.questions') q CROSS APPLY OPENJSON(q.value,'$.options') o WHERE a.Id='$attempt' AND JSON_VALUE(q.value,'$.questionTypeId')='6';") -split ',') { $x = $kv.Split('='); $truth[$x[0]] = $x[1] -eq 'true' }

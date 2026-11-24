@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Project.Application.DTOs.ExamDetailDTO;
 using Project.Application.Interfaces.Services;
+using Project.Application.Services;
 using Project.Domain.Entities;
 using Project.Infrastructure.Persistence;
 
@@ -19,10 +20,14 @@ public sealed class ExamVariantStore(ProjectDACNDbContext db) : IExamVariantServ
         var exam = await db.Exams.AsNoTracking().FirstOrDefaultAsync(x => x.Id == examId && x.Status != 255)
             ?? throw new KeyNotFoundException("Bài thi không tồn tại.");
         return await db.Questions.AsNoTracking()
-            .Where(x => x.SubjectId == exam.SubjectId && x.Status == 1)
+            // T18: câu con của đoạn đang ẩn — hoặc đoạn còn câu con bị ẩn (không bao giờ đủ đoạn) — không chọn được;
+            // trả kèm đoạn để FE chọn cả đoạn
+            .Where(x => x.SubjectId == exam.SubjectId && x.Status == 1 && (x.GroupId == null ||
+                (x.Group!.Status == 1 && !x.Group.Questions.Any(c => c.Status != 1 && c.Status != 255))))
             .OrderBy(x => x.Id)
             .Select(x => new ExamQuestionOptionDto { Id = x.Id, Content = x.Content, QuestionLevelId = x.QuestionLevelId,
-                QuestionLevelName = x.QuestionLevel == null ? null : x.QuestionLevel.Name })
+                QuestionLevelName = x.QuestionLevel == null ? null : x.QuestionLevel.Name,
+                GroupId = x.GroupId, GroupOrder = x.GroupOrder, GroupTitle = x.Group == null ? null : x.Group.Title })
             .ToListAsync();
     }
     public async Task<List<ExamVariantResponseDto>> GetByExamAsync(int examId) =>
@@ -73,22 +78,43 @@ public sealed class ExamVariantStore(ProjectDACNDbContext db) : IExamVariantServ
         if (selected.Count + dto.RandomSelections.Sum(x => (long)x.Count) != exam.NumberOfQuestions)
             throw new ArgumentException("Số câu hỏi phải bằng cấu hình bài thi.");
 
+        // To-be T18 (QT18-2/3): đoạn dùng chung đi nguyên khối. Kích thước đoạn = số câu con chưa xóa của đoạn đang hoạt động.
+        var groupSizes = await db.Questions.AsNoTracking()
+            .Where(x => x.SubjectId == exam.SubjectId && x.GroupId != null && x.Status != 255 &&
+                db.QuestionGroups.Any(g => g.Id == x.GroupId && g.Status == 1))
+            .GroupBy(x => x.GroupId!.Value).Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.Count);
+        // Chọn tay: câu con phải đi cùng MỌI câu con của đoạn (FE tự chọn cả đoạn)
+        var manual = await db.Questions.AsNoTracking().Where(x => selected.Contains(x.Id))
+            .Select(x => new { x.Id, x.GroupId, x.GroupOrder }).ToListAsync();
+        foreach (var group in manual.Where(x => x.GroupId != null).GroupBy(x => x.GroupId!.Value))
+            if (!groupSizes.TryGetValue(group.Key, out var size) || size != group.Count())
+                throw new ArgumentException($"GROUP_INCOMPLETE: câu thuộc đoạn dùng chung #{group.Key} phải được chọn cùng cả đoạn (đoạn đang ẩn hoặc còn câu con bị ẩn thì không chọn được).");
+        var random = new Random(RandomNumberGenerator.GetInt32(int.MaxValue));
         foreach (var rule in dto.RandomSelections)
         {
             var candidates = await db.Questions.AsNoTracking()
                 .Where(x => x.SubjectId == exam.SubjectId && x.Status == 1 &&
                     (rule.QuestionLevelId == null || x.QuestionLevelId == rule.QuestionLevelId) &&
                     !selected.Contains(x.Id))
-                .Select(x => x.Id).ToListAsync();
-            if (candidates.Count < rule.Count)
-                throw new InvalidOperationException("Không đủ câu hỏi phù hợp môn và mức độ.");
-            for (var i = 0; i < rule.Count; i++)
-            {
-                var at = RandomNumberGenerator.GetInt32(i, candidates.Count);
-                (candidates[i], candidates[at]) = (candidates[at], candidates[i]);
-                selected.Add(candidates[i]);
-            }
+                .Select(x => new { x.Id, x.GroupId, x.GroupOrder }).ToListAsync();
+            // Đoạn khớp luật mức độ khi MỌI câu con có mức độ đó (thiếu câu con trong ứng viên → bỏ cả đoạn)
+            var units = GroupedSelection.Units(candidates, x => x.GroupId, x => x.GroupOrder ?? 0, groupSizes);
+            // Review T18: thiếu vì phải bỏ đoạn (không đủ/không khớp mức độ) thì báo mã riêng, thiếu thật thì báo chung
+            var available = units.Sum(x => x.Count);
+            if (available < rule.Count)
+                throw new InvalidOperationException(candidates.Count >= rule.Count
+                    ? $"NOT_ENOUGH_QUESTIONS_FOR_GROUPS: chỉ có {available} câu dùng được (câu lẻ + đoạn đủ câu con khớp mức độ), cần {rule.Count}."
+                    : "Không đủ câu hỏi phù hợp môn và mức độ.");
+
+            var picked = GroupedSelection.PickExact(units, rule.Count, random)
+                ?? throw new InvalidOperationException($"NOT_ENOUGH_QUESTIONS_FOR_GROUPS: không ghép được đúng {rule.Count} câu " +
+                    $"từ câu lẻ và đoạn dùng chung (kích thước đoạn: {string.Join(", ", units.Where(x => x.Count > 1).Select(x => x.Count).OrderBy(x => x))}).");
+            selected.AddRange(picked.SelectMany(x => x).Select(x => x.Id));
         }
+        // Câu con của một đoạn liền nhau theo thứ tự trong đoạn
+        var placement = await db.Questions.AsNoTracking().Where(x => selected.Contains(x.Id))
+            .Select(x => new { x.Id, x.GroupId, x.GroupOrder }).ToDictionaryAsync(x => x.Id);
+        selected = GroupedSelection.Contiguous(selected, x => placement.GetValueOrDefault(x)?.GroupId, x => placement.GetValueOrDefault(x)?.GroupOrder ?? 0);
 
         var validCount = await db.Questions.CountAsync(x => selected.Contains(x.Id) &&
             x.SubjectId == exam.SubjectId && x.Status == 1);

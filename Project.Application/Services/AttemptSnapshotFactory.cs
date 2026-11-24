@@ -11,7 +11,9 @@ public static class AttemptSnapshotFactory
     {
         if (exam.Id <= 0 || variant.Id <= 0 || variant.ExamId != exam.Id || exam.Status != 1 || variant.Status != 1)
             throw new ArgumentException("Bài thi và mã đề phải được công khai và thuộc cùng bài thi.");
-        var links = variant.ExamDetailQuestions.OrderBy(x => x.Id).ToArray();
+        // T18: câu con của một đoạn liền nhau theo thứ tự trong đoạn (tại vị trí câu con đầu tiên)
+        var links = GroupedSelection.Contiguous(variant.ExamDetailQuestions.OrderBy(x => x.Id).ToArray(),
+            x => x.Question?.GroupId, x => x.Question?.GroupOrder ?? 0).ToArray();
         if (exam.NumberOfQuestions <= 0 || links.Length != exam.NumberOfQuestions ||
             links.Select(x => x.QuestionId).Distinct().Count() != links.Length)
             throw new ArgumentException("Mã đề phải có đúng số câu, không trùng câu hỏi.");
@@ -27,7 +29,8 @@ public static class AttemptSnapshotFactory
                 throw new ArgumentException("Tập đáp án của câu hỏi không hợp lệ.");
             questions.Add(BuildQuestion(question, link.Point));
         }
-        return new AttemptSnapshot(AttemptSnapshot.CurrentVersion, exam.Id, variant.Id, exam.Name, variant.Code, questions.AsReadOnly());
+        var (grouped, groups) = WithGroups(links.Select(x => x.Question).ToArray(), questions);   // T18
+        return new AttemptSnapshot(AttemptSnapshot.CurrentVersion, exam.Id, variant.Id, exam.Name, variant.Code, grouped, groups);
     }
 
     // Dùng chung cho Exam và Practice (To-be T5): câu hoạt động, loại 1–6 (T16: 4 điền ngắn; T17: 5 ghép cặp, 6 nhiều mệnh đề), có nội dung.
@@ -99,7 +102,41 @@ public static class AttemptSnapshotFactory
             question.Id, question.QuestionTypeId, question.Content,
             AnswerGrading.IsShortAnswer(question) ? Array.Empty<AttemptOptionDto>()
                 : Array.AsReadOnly(question.Options.Select(option => new AttemptOptionDto(option.Id, option.Content)).ToArray()),
-            MediaFor(question, mediaUrl), MatchesFor(question))).ToArray());
+            MediaFor(question, mediaUrl), MatchesFor(question), question.GroupId)).ToArray());
+
+    /// <summary>
+    /// To-be T18: gắn đoạn dùng chung — câu con nhận GroupId (Guid mới của snapshot), đoạn chụp chữ + media đang hoạt động.
+    /// <paramref name="sources"/> cùng thứ tự với <paramref name="built"/>; người gọi phải Include(Group).ThenInclude(Media).ThenInclude(Media).
+    /// </summary>
+    public static (IReadOnlyList<AttemptQuestionSnapshot> Questions, IReadOnlyList<AttemptGroupSnapshot>? Groups) WithGroups(
+        IReadOnlyList<Question> sources, IReadOnlyList<AttemptQuestionSnapshot> built)
+    {
+        var groups = new List<AttemptGroupSnapshot>();
+        var ids = new Dictionary<int, Guid>();
+        var result = new AttemptQuestionSnapshot[built.Count];
+        for (var i = 0; i < built.Count; i++)
+        {
+            var source = sources[i];
+            if (source.GroupId is not int groupId) { result[i] = built[i]; continue; }
+            var group = source.Group ?? throw new InvalidOperationException("Đoạn dùng chung chưa được nạp khi chụp snapshot.");
+            if (!ids.TryGetValue(groupId, out var snapshotId))
+            {
+                snapshotId = Guid.NewGuid();
+                ids[groupId] = snapshotId;
+                groups.Add(new AttemptGroupSnapshot(snapshotId, groupId, group.Title, group.Content,
+                    Array.AsReadOnly(group.Media.Where(x => x.Media != null && x.Media.Status == 1).OrderBy(x => x.SortOrder)
+                        .Select(x => new AttemptMediaSnapshot(x.MediaId, x.Media.Kind, x.Media.Width, x.Media.Height)).ToArray())));
+            }
+            result[i] = built[i] with { GroupId = snapshotId };
+        }
+        return (Array.AsReadOnly(result), groups.Count == 0 ? null : groups.AsReadOnly());
+    }
+
+    /// <summary>T18: đoạn dùng chung cho học viên (chữ + media URL ký); snapshot cũ/không có đoạn → rỗng.</summary>
+    public static IReadOnlyList<AttemptGroupDto> GroupsForStudent(AttemptSnapshot snapshot, Func<Guid, string>? mediaUrl) =>
+        Array.AsReadOnly((snapshot.Groups ?? []).Select(group => new AttemptGroupDto(group.Id, group.Title, group.Content,
+            mediaUrl == null || group.Media == null ? Array.Empty<AttemptMediaDto>()
+                : Array.AsReadOnly(group.Media.Select(m => new AttemptMediaDto(m.Id, m.Kind, m.Width, m.Height, mediaUrl(m.Id))).ToArray()))).ToArray());
 
     /// <summary>T17: vế phải của câu ghép cặp theo thứ tự đã xáo (null với loại khác).</summary>
     public static IReadOnlyList<AttemptOptionDto>? MatchesFor(AttemptQuestionSnapshot question)

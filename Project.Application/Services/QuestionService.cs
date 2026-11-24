@@ -158,6 +158,7 @@ public class QuestionService : IQuestionService
         TagIds = item.QuestionTags.Select(x => x.TagId).OrderBy(x => x).ToList(), MediaCount = item.QuestionMedia.Count,
         ShortAnswerIgnoreDiacritics = item.ShortAnswerIgnoreDiacritics, ShortAnswerNumeric = item.ShortAnswerNumeric,
         ShortAnswerTolerance = item.ShortAnswerTolerance,
+        GroupId = item.GroupId, GroupOrder = item.GroupOrder, GroupTitle = item.Group?.Title,   // To-be T18
         Answers = item.Answers.Where(x => x.Status != 255).OrderBy(x => x.Id).Select(x => new QuestionAnswerResponseDto
         { Id = x.Id, Content = x.Content, IsCorrect = x.IsCorrect, MatchContent = x.MatchContent }).ToList()
     };

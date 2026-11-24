@@ -29,6 +29,7 @@ XlsxReportSmoke.Run();
 MediaSmoke.Run();
 ShortAnswerSmoke.Run();
 MatchingStatementsSmoke.Run();
+QuestionGroupsSmoke.Run();
 QuestionWorkbookSmoke.Run();
 QuestionExportSmoke.Run();
 AccountWorkbookSmoke.Run();
@@ -91,7 +92,7 @@ var controllerTypes = new[]
     typeof(StudentAttemptController), typeof(AnswerController), typeof(ExamController),
     typeof(QuestionExportController), typeof(AccountExcelController), typeof(AdminAuditController),
     typeof(TeacherOverviewController), typeof(ChapterController), typeof(TagController), typeof(PracticeController), typeof(ReviewFlagController), typeof(StudentClassController), typeof(StudentAnalysisController),
-    typeof(MediaController), typeof(QuestionMediaController), typeof(AdminMediaController)
+    typeof(MediaController), typeof(QuestionMediaController), typeof(AdminMediaController), typeof(QuestionGroupController)
 };
 
 foreach (var controllerType in controllerTypes)

@@ -1209,6 +1209,12 @@ namespace Project.Infrastructure.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("nvarchar(4000)");
 
+                    b.Property<int?>("GroupId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("GroupOrder")
+                        .HasColumnType("int");
+
                     b.Property<int?>("QuestionLevelId")
                         .HasColumnType("int");
 
@@ -1245,8 +1251,13 @@ namespace Project.Infrastructure.Migrations
 
                     b.HasIndex("QuestionTypeId");
 
+                    b.HasIndex("GroupId", "GroupOrder")
+                        .HasDatabaseName("IX_Questions_Group");
+
                     b.ToTable("Questions", t =>
                         {
+                            t.HasCheckConstraint("CK_Questions_Group", "([GroupId] IS NULL AND [GroupOrder] IS NULL) OR ([GroupId] IS NOT NULL AND [GroupOrder] IS NOT NULL)");
+
                             t.HasCheckConstraint("CK_Questions_ShortAnswerTolerance", "[ShortAnswerTolerance] IS NULL OR ([ShortAnswerTolerance] >= 0 AND [ShortAnswerTolerance] <= 1000000000)");
                         });
                 });
@@ -1272,6 +1283,71 @@ namespace Project.Infrastructure.Migrations
                     b.HasIndex("QuestionId");
 
                     b.ToTable("QuestionAnswers");
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.QuestionGroup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint")
+                        .HasDefaultValue((byte)1);
+
+                    b.Property<int>("SubjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubjectId", "Status")
+                        .HasDatabaseName("IX_QuestionGroups_Subject_Status");
+
+                    b.ToTable("QuestionGroups", (string)null);
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.QuestionGroupMedia", b =>
+                {
+                    b.Property<int>("GroupId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("MediaId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("GroupId", "MediaId");
+
+                    b.HasIndex("MediaId")
+                        .HasDatabaseName("IX_QuestionGroupMedia_Media");
+
+                    b.ToTable("QuestionGroupMedia", (string)null);
                 });
 
             modelBuilder.Entity("Project.Domain.Entities.QuestionLevel", b =>
@@ -2175,6 +2251,11 @@ namespace Project.Infrastructure.Migrations
                         .HasForeignKey("ChapterId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Project.Domain.Entities.QuestionGroup", "Group")
+                        .WithMany("Questions")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Project.Domain.Entities.QuestionLevel", "QuestionLevel")
                         .WithMany("Questions")
                         .HasForeignKey("QuestionLevelId");
@@ -2186,6 +2267,8 @@ namespace Project.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Chapter");
+
+                    b.Navigation("Group");
 
                     b.Navigation("QuestionLevel");
 
@@ -2209,6 +2292,36 @@ namespace Project.Infrastructure.Migrations
                     b.Navigation("Answer");
 
                     b.Navigation("Question");
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.QuestionGroup", b =>
+                {
+                    b.HasOne("Project.Domain.Entities.Subject", "Subject")
+                        .WithMany()
+                        .HasForeignKey("SubjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Subject");
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.QuestionGroupMedia", b =>
+                {
+                    b.HasOne("Project.Domain.Entities.QuestionGroup", "Group")
+                        .WithMany("Media")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Project.Domain.Entities.MediaFile", "Media")
+                        .WithMany()
+                        .HasForeignKey("MediaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Group");
+
+                    b.Navigation("Media");
                 });
 
             modelBuilder.Entity("Project.Domain.Entities.QuestionMedia", b =>
@@ -2394,6 +2507,13 @@ namespace Project.Infrastructure.Migrations
                     b.Navigation("QuestionMedia");
 
                     b.Navigation("QuestionTags");
+                });
+
+            modelBuilder.Entity("Project.Domain.Entities.QuestionGroup", b =>
+                {
+                    b.Navigation("Media");
+
+                    b.Navigation("Questions");
                 });
 
             modelBuilder.Entity("Project.Domain.Entities.QuestionLevel", b =>

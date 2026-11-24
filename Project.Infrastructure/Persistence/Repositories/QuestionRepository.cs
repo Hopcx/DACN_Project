@@ -23,7 +23,7 @@ namespace Project.Infrastructure.Persistence.Repositories
         public async Task<List<Question>> GetAllQuestionsAsync(string? textSearch, int? subjectId, int? questionTypeId, int? questionLevelId,
             int? chapterId = null, IReadOnlyCollection<int>? tagIds = null)
         {
-            var query = _context.Questions.Include(x => x.Answers).Include(x => x.QuestionTags).Include(x => x.QuestionMedia).AsSplitQuery().AsNoTracking().AsQueryable();
+            var query = _context.Questions.Include(x => x.Answers).Include(x => x.QuestionTags).Include(x => x.QuestionMedia).Include(x => x.Group).AsSplitQuery().AsNoTracking().AsQueryable();
             if (chapterId.HasValue) query = query.Where(x => x.ChapterId == chapterId.Value);
             if (tagIds is { Count: > 0 })
             {
@@ -49,7 +49,7 @@ namespace Project.Infrastructure.Persistence.Repositories
 
         public async Task<Question> GetQuestionByIdAsync(int id)
         {
-            var question = await _context.Questions.Include(x => x.Answers).Include(x => x.QuestionTags).Include(x => x.QuestionMedia).AsSplitQuery()
+            var question = await _context.Questions.Include(x => x.Answers).Include(x => x.QuestionTags).Include(x => x.QuestionMedia).Include(x => x.Group).AsSplitQuery()
                 .AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
             if (question != null)
                 question.IsUsedInExam = await _context.ExamDetailQuestions.AnyAsync(x => x.QuestionId == id);
@@ -99,6 +99,8 @@ namespace Project.Infrastructure.Persistence.Repositories
             var existing = await _context.Questions.FindAsync(id);
             if (existing == null)
                 return null;
+            // To-be T18: câu thuộc đoạn dùng chung phải gỡ khỏi đoạn trước khi xóa
+            if (existing.GroupId != null) return null;
             if (await _context.ExamDetailQuestions.AnyAsync(x => x.QuestionId == id) ||
                 await _context.AnswerSubmissions.AnyAsync(x => x.QuestionId == id))
                 return null;
@@ -165,6 +167,9 @@ namespace Project.Infrastructure.Persistence.Repositories
 
         public async Task<string?> MetadataProblemAsync(int subjectId, int? chapterId, IReadOnlyCollection<int> tagIds, int? questionId = null)
         {
+            // To-be T18: câu con của đoạn dùng chung không đổi môn được (đoạn chỉ chứa câu cùng môn)
+            if (questionId.HasValue && await _context.Questions.AnyAsync(x => x.Id == questionId.Value && x.GroupId != null && x.SubjectId != subjectId))
+                return "Câu thuộc đoạn dùng chung; gỡ khỏi đoạn trước khi đổi môn.";
             if (chapterId.HasValue)
             {
                 var chapter = await _context.Chapters.AsNoTracking().Where(x => x.Id == chapterId.Value)
