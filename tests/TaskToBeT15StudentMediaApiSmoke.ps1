@@ -111,7 +111,7 @@ SELECT CONCAT(@e,'|',@sc);
     Expect $start.status 200 'start exam'
     $attempt = $start.body.data.attemptId; $qm = @($start.body.data.questions[0].media)
     Expect (($qm | ForEach-Object { "$($_.id)/$($_.kind)" }) -join ',') "$($png.id)/image,$($aud.id)/audio" 'media in order'
-    Expect (Sql "SELECT JSON_VALUE(SnapshotJson,'$.version') FROM dbo.ExamAttempts WHERE Id='$attempt';") '5' 'snapshot v5 (T16)'
+    Expect (Sql "SELECT JSON_VALUE(SnapshotJson,'$.version') FROM dbo.ExamAttempts WHERE Id='$attempt';") '6' 'snapshot v6 (T17)'
     Expect (Sql "SELECT COUNT(*) FROM dbo.MediaReferences WHERE SourceKind='exam' AND SourceId='$attempt';") '2' 'MediaReferences for attempt'
     $g = Call 'GET' $qm[0].url
     Expect "$($g.status)|$($g.type)" '200|image/png' 'student URL serves image'

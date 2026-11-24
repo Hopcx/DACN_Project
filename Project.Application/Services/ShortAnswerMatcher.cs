@@ -14,7 +14,7 @@ namespace Project.Application.Services;
 /// </summary>
 public static partial class ShortAnswerMatcher
 {
-    public const int QuestionTypeId = 4;
+    public const int QuestionTypeId = QuestionKinds.ShortAnswer;   // review T17: một nguồn cho Id loại câu
     public const int MaxTextLength = 200;
     public const int MaxAccepted = 10;
     public const decimal MaxTolerance = 1_000_000_000m;
@@ -74,20 +74,32 @@ public static partial class ShortAnswerMatcher
 
 /// <summary>
 /// To-be T16: một quy tắc đúng/sai cho mọi nơi chấm (điểm, kiểm tra từng câu, outcome, báo cáo) — tất cả-hoặc-không (Q3, Q10b).
+/// To-be T17: ghép cặp (mọi vế trái ghép đúng vế phải) và nhiều mệnh đề (mọi mệnh đề chọn đúng Đúng/Sai); thiếu mục = sai.
 /// Câu trả lời đã qua <see cref="AttemptSnapshotFactory.ValidateDraft"/>.
 /// </summary>
 public static class AnswerGrading
 {
     public static bool IsShortAnswer(AttemptQuestionSnapshot question) => question.QuestionTypeId == ShortAnswerMatcher.QuestionTypeId;
+    public static bool HasItems(AttemptQuestionSnapshot question) => QuestionKinds.HasItems(question.QuestionTypeId);
 
     public static bool IsAnswered(AttemptQuestionSnapshot question, AttemptAnswerDto? answer) => answer != null &&
-        (IsShortAnswer(question) ? !string.IsNullOrWhiteSpace(answer.Text) : answer.SelectedAnswerIds.Count > 0);
+        (IsShortAnswer(question) ? !string.IsNullOrWhiteSpace(answer.Text)
+            : HasItems(question) ? (answer.Items?.Count ?? 0) > 0
+            : answer.SelectedAnswerIds.Count > 0);
 
     public static bool IsCorrect(AttemptQuestionSnapshot question, AttemptAnswerDto? answer)
     {
         if (!IsAnswered(question, answer)) return false;
         if (IsShortAnswer(question))
             return ShortAnswerMatcher.Matches(question.ShortAnswer, question.Options.Where(x => x.IsCorrect).Select(x => x.Content), answer!.Text);
+        if (HasItems(question))
+        {
+            var items = answer!.Items!.GroupBy(x => x.OptionId).ToDictionary(g => g.Key, g => g.First());
+            return items.Count == question.Options.Count && question.Options.All(option => items.TryGetValue(option.Id, out var item) &&
+                (question.QuestionTypeId == QuestionKinds.Matching
+                    ? item.MatchId != null && item.MatchId == option.MatchId
+                    : item.Value != null && item.Value == option.IsCorrect));
+        }
         var correct = question.Options.Where(x => x.IsCorrect).Select(x => x.Id).ToHashSet();
         return answer!.SelectedAnswerIds.ToHashSet().SetEquals(correct);
     }
@@ -95,4 +107,12 @@ public static class AnswerGrading
     /// <summary>Đáp án chấp nhận của câu điền ngắn (chỉ dùng khi được phép xem đáp án).</summary>
     public static IReadOnlyList<string> AcceptedAnswers(AttemptQuestionSnapshot question) =>
         IsShortAnswer(question) ? Array.AsReadOnly(question.Options.Where(x => x.IsCorrect).Select(x => x.Content).ToArray()) : [];
+
+    /// <summary>T17: câu trả lời đúng từng mục (ghép cặp: MatchId; nhiều mệnh đề: Value) — chỉ dùng khi được phép xem đáp án.</summary>
+    public static IReadOnlyList<AttemptItemDto>? CorrectItems(AttemptQuestionSnapshot question) => question.QuestionTypeId switch
+    {
+        QuestionKinds.Matching => Array.AsReadOnly(question.Options.Select(x => new AttemptItemDto(x.Id, x.MatchId)).ToArray()),
+        QuestionKinds.Statements => Array.AsReadOnly(question.Options.Select(x => new AttemptItemDto(x.Id, null, x.IsCorrect)).ToArray()),
+        _ => null
+    };
 }

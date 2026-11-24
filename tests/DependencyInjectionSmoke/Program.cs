@@ -28,6 +28,7 @@ ClassReportSmoke.Run();
 XlsxReportSmoke.Run();
 MediaSmoke.Run();
 ShortAnswerSmoke.Run();
+MatchingStatementsSmoke.Run();
 QuestionWorkbookSmoke.Run();
 QuestionExportSmoke.Run();
 AccountWorkbookSmoke.Run();

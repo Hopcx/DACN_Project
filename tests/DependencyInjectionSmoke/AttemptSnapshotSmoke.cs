@@ -29,7 +29,7 @@ internal static class AttemptSnapshotSmoke
         }
         var snapshot = AttemptSnapshotFactory.Create(exam, variant);
         // To-be T4: snapshot v2 chụp lời giải (trim, rỗng → null)
-        Check(snapshot.Version == 5 && AttemptSnapshot.CurrentVersion == 5, "New snapshots must be version 5.");
+        Check(snapshot.Version == 6 && AttemptSnapshot.CurrentVersion == 6, "New snapshots must be version 6.");
         Check(snapshot.Questions[0].Explanation == "Vì A đúng", "Explanation must be captured and trimmed.");
         Check(snapshot.Questions[1].Explanation == null, "Blank explanation must become null.");
         var serialized = JsonSerializer.Serialize(snapshot);
