@@ -58,23 +58,39 @@ public class QuestionImportController : ControllerBase
                 errors.Add(new(row.Number, "A", "SUBJECT_ID", "SubjectId phải là ID dương"));
             if (!int.TryParse(row.Values[1], out var levelId) || levelId <= 0)
                 errors.Add(new(row.Number, "B", "LEVEL_ID", "QuestionLevelId phải là ID dương"));
-            if (!int.TryParse(row.Values[2], out var typeId) || typeId is < 1 or > ShortAnswerMatcher.QuestionTypeId)
-                errors.Add(new(row.Number, "C", "TYPE_ID", "QuestionTypeId chỉ nhận 1, 2, 3, 4"));
+            if (!int.TryParse(row.Values[2], out var typeId) || !QuestionKinds.IsSupported(typeId))
+                errors.Add(new(row.Number, "C", "TYPE_ID", "QuestionTypeId chỉ nhận 1–6"));
             var isShort = typeId == ShortAnswerMatcher.QuestionTypeId;
+            var isMatching = typeId == QuestionKinds.Matching;      // To-be T17
+            var isStatements = typeId == QuestionKinds.Statements;
             var content = row.Values[3].Trim();
             if (content.Length is < 1 or > 4000)
                 errors.Add(new(row.Number, "D", "CONTENT", "Nội dung cần 1–4000 ký tự"));
             var answers = row.Values[4].Split(';', StringSplitOptions.TrimEntries);
-            if (isShort ? answers.Length is < 1 or > ShortAnswerMatcher.MaxAccepted || answers.Any(x => x.Length is < 1 or > ShortAnswerMatcher.MaxTextLength)
-                        : answers.Length is < 2 or > 20 || answers.Any(x => x.Length is < 1 or > 2000))
-                errors.Add(new(row.Number, "E", "ANSWERS", isShort ? "Câu điền ngắn cần 1–10 đáp án chấp nhận (mỗi đáp án 1–200 ký tự), ngăn bởi dấu chấm phẩy"
-                    : "Cần 2–20 đáp án, ngăn bởi dấu chấm phẩy"));
-            // To-be T16: câu điền ngắn để trống CorrectIndexes (mọi đáp án là đáp án chấp nhận)
-            var indexes = isShort ? [] : row.Values[5].Split(',', StringSplitOptions.TrimEntries);
-            if (isShort ? row.Values[5].Length > 0
-                : indexes.Length == 0 || indexes.Any(x => !int.TryParse(x, out var n) || n < 1 || n > answers.Length) ||
-                  indexes.Distinct().Count() != indexes.Length)
+            // T17: ghép cặp ghi mỗi cặp "vế trái => vế phải"
+            var pairs = isMatching ? answers.Select(x => x.Split("=>", StringSplitOptions.TrimEntries)).ToArray() : [];
+            var answerProblem = isShort
+                ? answers.Length is < 1 or > ShortAnswerMatcher.MaxAccepted || answers.Any(x => x.Length is < 1 or > ShortAnswerMatcher.MaxTextLength)
+                    ? "Câu điền ngắn cần 1–10 đáp án chấp nhận (mỗi đáp án 1–200 ký tự), ngăn bởi dấu chấm phẩy" : null
+                : isMatching
+                    ? answers.Length is < QuestionKinds.MinItems or > QuestionKinds.MaxItems ||
+                      pairs.Any(p => p.Length != 2 || p[0].Length is < 1 or > 2000 || p[1].Length is < 1 or > 2000)
+                        ? "Câu ghép cặp cần 2–10 cặp dạng \"vế trái => vế phải\", ngăn bởi dấu chấm phẩy" : null
+                : isStatements
+                    ? answers.Length is < QuestionKinds.MinItems or > QuestionKinds.MaxItems || answers.Any(x => x.Length is < 1 or > 2000)
+                        ? "Câu nhiều mệnh đề cần 2–10 mệnh đề, ngăn bởi dấu chấm phẩy" : null
+                : answers.Length is < 2 or > 20 || answers.Any(x => x.Length is < 1 or > 2000)
+                    ? "Cần 2–20 đáp án, ngăn bởi dấu chấm phẩy" : null;
+            if (answerProblem != null) errors.Add(new(row.Number, "E", "ANSWERS", answerProblem));
+            // To-be T16: câu điền ngắn để trống CorrectIndexes (mọi đáp án là đáp án chấp nhận).
+            // T17: ghép cặp để trống; nhiều mệnh đề = chỉ số mệnh đề đúng (được để trống khi mọi mệnh đề sai).
+            var emptyIndexes = isShort || isMatching || (isStatements && row.Values[5].Length == 0);
+            var indexes = emptyIndexes ? [] : row.Values[5].Split(',', StringSplitOptions.TrimEntries);
+            if ((isShort || isMatching) ? row.Values[5].Length > 0
+                : !emptyIndexes && (indexes.Length == 0 || indexes.Any(x => !int.TryParse(x, out var n) || n < 1 || n > answers.Length) ||
+                  indexes.Distinct().Count() != indexes.Length))
                 errors.Add(new(row.Number, "F", "CORRECT_INDEXES", isShort ? "Câu điền ngắn để trống CorrectIndexes"
+                    : isMatching ? "Câu ghép cặp để trống CorrectIndexes"
                     : "Chỉ số đáp án đúng bắt đầu từ 1, ngăn bởi dấu phẩy"));
             var options = ShortAnswerOptions.Parse(row.Values[6]);
             if (options.Error != null || (!isShort && row.Values[6].Length > 0))
@@ -85,8 +101,10 @@ public class QuestionImportController : ControllerBase
             var correct = indexes.Select(int.Parse).ToHashSet();
             var dto = new QuestionCreateDto { SubjectId = subjectId, QuestionLevelId = levelId,
                 QuestionTypeId = typeId, Content = content, Status = 1,
-                Answers = answers.Select((answer, i) => new QuestionAnswerInputDto
-                { Content = answer, IsCorrect = isShort || correct.Contains(i + 1) }).ToList() };
+                Answers = isMatching
+                    ? pairs.Select(p => new QuestionAnswerInputDto { Content = p[0], MatchContent = p[1], IsCorrect = true }).ToList()
+                    : answers.Select((answer, i) => new QuestionAnswerInputDto
+                    { Content = answer, IsCorrect = isShort || correct.Contains(i + 1) }).ToList() };
             if (isShort)
             {
                 dto.ShortAnswerIgnoreDiacritics = options.IgnoreDiacritics; dto.ShortAnswerNumeric = options.Numeric;
@@ -123,7 +141,8 @@ public class QuestionImportController : ControllerBase
                 ShortAnswerNumeric = dto.QuestionTypeId == ShortAnswerMatcher.QuestionTypeId ? dto.ShortAnswerNumeric == true : null,
                 ShortAnswerTolerance = dto.QuestionTypeId == ShortAnswerMatcher.QuestionTypeId && dto.ShortAnswerNumeric == true ? dto.ShortAnswerTolerance ?? 0 : null,
                 Answers = dto.Answers.Select(x => new Answer
-                { Content = x.Content, IsCorrect = x.IsCorrect, Status = 1 }).ToList() });
+                { Content = x.Content, IsCorrect = x.IsCorrect, Status = 1,
+                  MatchContent = dto.QuestionTypeId == QuestionKinds.Matching ? x.MatchContent : null }).ToList() });
         await _db.SaveChangesAsync();
         await transaction.CommitAsync();
         return Ok(ApiResponse<object>.Ok(new { imported = parsed.Count, errors }));

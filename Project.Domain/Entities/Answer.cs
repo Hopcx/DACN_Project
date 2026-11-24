@@ -19,6 +19,9 @@ namespace Project.Domain.Entities
 
         public bool IsCorrect { get; set; }
 
+        // To-be T17 (QT17-2): vế phải của câu ghép cặp (loại 5; Content = vế trái). Loại khác NULL.
+        public string? MatchContent { get; set; }
+
         public byte? Status { get; set; }
 
         public Guid? CreatedBy { get; set; }

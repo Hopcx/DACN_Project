@@ -11,7 +11,8 @@ public sealed class PracticeQuestionLockedException : Exception
 
 /// <summary>To-be T16: câu điền ngắn có Text (bài làm) và AcceptedAnswers (đáp án chấp nhận); loại 1–3 để null.</summary>
 public sealed record PracticeCheckResult(Guid QuestionId, IReadOnlyList<Guid> SelectedAnswerIds, bool IsCorrect,
-    IReadOnlyList<Guid> CorrectAnswerIds, string? Explanation, string? Text = null, IReadOnlyList<string>? AcceptedAnswers = null);
+    IReadOnlyList<Guid> CorrectAnswerIds, string? Explanation, string? Text = null, IReadOnlyList<string>? AcceptedAnswers = null,
+    IReadOnlyList<AttemptItemDto>? Items = null, IReadOnlyList<AttemptItemDto>? CorrectItems = null);
 
 /// <summary>
 /// To-be T6: chế độ "kiểm tra từng câu" — hàm thuần, không DB. Câu đã chốt giữ nguyên lựa chọn đến khi nộp;
@@ -27,10 +28,12 @@ public static class PracticeCheck
     public static PracticeCheckResult Result(AttemptQuestionSnapshot question, AttemptAnswerDto answer)
     {
         var shortAnswer = AnswerGrading.IsShortAnswer(question);
-        var correct = shortAnswer ? Array.Empty<Guid>() : question.Options.Where(x => x.IsCorrect).Select(x => x.Id).ToArray();
+        var correct = shortAnswer || AnswerGrading.HasItems(question) ? Array.Empty<Guid>() : question.Options.Where(x => x.IsCorrect).Select(x => x.Id).ToArray();
         return new PracticeCheckResult(question.Id, answer.SelectedAnswerIds, AnswerGrading.IsCorrect(question, answer),
             Array.AsReadOnly(correct), question.Explanation,
-            shortAnswer ? answer.Text : null, shortAnswer ? AnswerGrading.AcceptedAnswers(question) : null);
+            shortAnswer ? answer.Text : null, shortAnswer ? AnswerGrading.AcceptedAnswers(question) : null,
+            // T17: ghép cặp / nhiều mệnh đề — câu trả lời từng mục và đáp án đúng từng mục (sau khi chốt)
+            AnswerGrading.HasItems(question) ? answer.Items ?? [] : null, AnswerGrading.CorrectItems(question));
     }
 
     /// <summary>Kết quả các câu đã chốt theo thứ tự snapshot (cho GET phiên perQuestion).</summary>
@@ -49,14 +52,15 @@ public static class PracticeCheck
     /// </summary>
     public static (IReadOnlyList<AttemptAnswerDto> Draft, IReadOnlyList<Guid> Checked) Apply(AttemptSnapshot snapshot,
         IReadOnlyList<AttemptAnswerDto> draft, IReadOnlyList<Guid> checkedIds, Guid questionId, IReadOnlyList<Guid>? selected,
-        string? text = null)
+        string? text = null, IReadOnlyList<AttemptItemDto>? items = null)
     {
         var question = snapshot.Questions.FirstOrDefault(x => x.Id == questionId) ?? throw new ArgumentException("Câu hỏi không thuộc phiên.");
         if (checkedIds.Contains(questionId)) throw new ArgumentException("Câu hỏi đã được kiểm tra.");
-        var answer = new AttemptAnswerDto(questionId, selected ?? Array.Empty<Guid>(), text);
+        var answer = new AttemptAnswerDto(questionId, selected ?? Array.Empty<Guid>(), text, items);
         if (!AnswerGrading.IsAnswered(question, answer))
             throw new ArgumentException(AnswerGrading.IsShortAnswer(question) ? "Hãy nhập câu trả lời trước khi kiểm tra." : "Hãy chọn đáp án trước khi kiểm tra.");
-        var next = draft.Where(x => x.QuestionId != questionId && (x.SelectedAnswerIds.Count > 0 || !string.IsNullOrWhiteSpace(x.Text))).ToList();
+        var next = draft.Where(x => x.QuestionId != questionId &&
+            (x.SelectedAnswerIds.Count > 0 || !string.IsNullOrWhiteSpace(x.Text) || x.Items is { Count: > 0 })).ToList();
         next.Add(answer);
         var validated = AttemptSnapshotFactory.ValidateDraft(snapshot, next);
         return (validated, Array.AsReadOnly(checkedIds.Append(questionId).ToArray()));
@@ -76,8 +80,13 @@ public static class PracticeCheck
         foreach (var answer in incoming!)
             if (locked.TryGetValue(answer.QuestionId, out var kept) &&
                 (!canonical[answer.QuestionId].SelectedAnswerIds.ToHashSet().SetEquals(kept.SelectedAnswerIds) ||
-                 (canonical[answer.QuestionId].Text ?? "") != (kept.Text ?? "")))
+                 (canonical[answer.QuestionId].Text ?? "") != (kept.Text ?? "") ||
+                 !SameItems(canonical[answer.QuestionId].Items, kept.Items)))
                 throw new PracticeQuestionLockedException();
         return Array.AsReadOnly(validated.Select(x => locked.TryGetValue(x.QuestionId, out var kept) ? kept : x).ToArray());
     }
+
+    // T17: so câu trả lời từng mục (đã chuẩn hóa thứ tự bởi ValidateDraft)
+    private static bool SameItems(IReadOnlyList<AttemptItemDto>? a, IReadOnlyList<AttemptItemDto>? b) =>
+        (a ?? []).SequenceEqual(b ?? []);
 }

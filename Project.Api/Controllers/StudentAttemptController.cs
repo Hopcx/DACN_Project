@@ -146,10 +146,15 @@ public class StudentAttemptController : ControllerBase
             selectedAnswerIds = answer.SelectedAnswerIds,
             // To-be T16: câu điền ngắn không có lựa chọn — trả bài làm + đáp án chấp nhận; mọi câu có isCorrect (cùng hàm với điểm)
             options = question.Options.Where(_ => !shortAnswer).Select(option => new {
-                id = option.Id, content = option.Content, isCorrect = option.IsCorrect
+                id = option.Id, content = option.Content, isCorrect = option.IsCorrect,
+                matchId = option.MatchId, matchContent = option.MatchContent   // T17: cặp đúng (loại 5), chỉ khi được xem lại
             }).ToList(),
             text = shortAnswer ? answer.Text : null,
             acceptedAnswers = shortAnswer ? AnswerGrading.AcceptedAnswers(question) : null,
+            // To-be T17: câu trả lời từng mục, đáp án đúng từng mục, vế phải theo thứ tự học viên đã thấy
+            items = AnswerGrading.HasItems(question) ? answer.Items ?? [] : null,
+            correctItems = AnswerGrading.CorrectItems(question),
+            matches = AttemptSnapshotFactory.MatchesFor(question),
             isCorrect = AnswerGrading.IsCorrect(question, answer),
             // To-be T4: lời giải mở cùng điều kiện với đáp án đúng; snapshot v1 không có → null
             explanation = question.Explanation,

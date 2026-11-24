@@ -19,7 +19,9 @@ public sealed record CreatePracticeRequest(int SubjectId, List<int>? ChapterIds,
 public sealed record PracticeSaveRequest(int Revision, IReadOnlyList<AttemptAnswerDto>? Answers);
 public sealed record PracticeFinishRequest(int Revision);
 // To-be T16: Text = bài làm câu điền ngắn (loại 4)
-public sealed record PracticeCheckRequest(int Revision, IReadOnlyList<Guid>? SelectedAnswerIds, string? Text = null);
+// To-be T17: Items = câu trả lời từng mục (ghép cặp / nhiều mệnh đề)
+public sealed record PracticeCheckRequest(int Revision, IReadOnlyList<Guid>? SelectedAnswerIds, string? Text = null,
+    IReadOnlyList<AttemptItemDto>? Items = null);
 
 /// <summary>
 /// To-be T5: Luyện tập của học viên. Chỉ môn của lớp đã được duyệt (Q18); chỉ chủ phiên thấy phiên (người khác 404).
@@ -79,7 +81,7 @@ public class PracticeController : ControllerBase
     private async Task<List<Question>> PoolAsync(PracticeSnapshotFactory.Criteria criteria)
     {
         var query = _db.Questions.AsNoTracking().Include(x => x.Answers).Include(x => x.QuestionTags)
-            .Where(x => x.SubjectId == criteria.SubjectId && x.Status == 1 && x.QuestionTypeId >= 1 && x.QuestionTypeId <= ShortAnswerMatcher.QuestionTypeId);
+            .Where(x => x.SubjectId == criteria.SubjectId && x.Status == 1 && x.QuestionTypeId >= 1 && x.QuestionTypeId <= QuestionKinds.Max);
         if (criteria.ChapterIds.Count > 0)
             query = query.Where(x => x.ChapterId != null && criteria.ChapterIds.Contains(x.ChapterId.Value));
         if (criteria.QuestionLevelIds.Count > 0)
@@ -137,7 +139,7 @@ public class PracticeController : ControllerBase
             .Select(x => new { x.Id, x.Name }).ToListAsync();
         var subjectIds = subjects.Select(x => x.Id).ToList();
         var questions = (await _db.Questions.AsNoTracking().Include(x => x.Answers).Include(x => x.QuestionTags)
-                .Where(x => subjectIds.Contains(x.SubjectId) && x.Status == 1 && x.QuestionTypeId >= 1 && x.QuestionTypeId <= ShortAnswerMatcher.QuestionTypeId)
+                .Where(x => subjectIds.Contains(x.SubjectId) && x.Status == 1 && x.QuestionTypeId >= 1 && x.QuestionTypeId <= QuestionKinds.Max)
                 .AsSplitQuery().ToListAsync())
             .Where(x => PracticeSnapshotFactory.IsUsable(x, x.SubjectId)).ToList();
         var chapters = await _db.Chapters.AsNoTracking().Where(x => subjectIds.Contains(x.SubjectId) && x.Status == 1)
@@ -352,7 +354,7 @@ public class PracticeController : ControllerBase
         if (row.State != "inProgress") return Deny("PRACTICE_CLOSED");
         if (request.Revision != row.Revision) return Deny("CONCURRENCY_CONFLICT");
         IReadOnlyList<AttemptAnswerDto> draft; IReadOnlyList<Guid> nextChecked;
-        try { (draft, nextChecked) = PracticeCheck.Apply(snapshot, Draft(row), checkedIds, questionId, request.SelectedAnswerIds, request.Text); }
+        try { (draft, nextChecked) = PracticeCheck.Apply(snapshot, Draft(row), checkedIds, questionId, request.SelectedAnswerIds, request.Text, request.Items); }
         catch (ArgumentException) { return BadRequest(ApiResponse<string>.Fail("INVALID_SELECTION")); }
         row.DraftJson = JsonSerializer.Serialize(draft, Json);
         row.CheckedJson = JsonSerializer.Serialize(nextChecked, Json);
@@ -381,7 +383,12 @@ public class PracticeController : ControllerBase
                 selectedAnswerIds = answer.SelectedAnswerIds, isCorrect = AnswerGrading.IsCorrect(question, answer),
                 text = shortAnswer ? answer.Text : null,
                 acceptedAnswers = shortAnswer ? AnswerGrading.AcceptedAnswers(question) : null,
-                options = question.Options.Where(_ => !shortAnswer).Select(option => new { id = option.Id, content = option.Content, isCorrect = option.IsCorrect }).ToList(),
+                // To-be T17: câu trả lời từng mục + đáp án đúng từng mục + vế phải theo thứ tự đã thấy
+                items = AnswerGrading.HasItems(question) ? answer.Items ?? [] : null,
+                correctItems = AnswerGrading.CorrectItems(question),
+                matches = AttemptSnapshotFactory.MatchesFor(question),
+                options = question.Options.Where(_ => !shortAnswer).Select(option => new { id = option.Id, content = option.Content, isCorrect = option.IsCorrect,
+                    matchId = option.MatchId, matchContent = option.MatchContent }).ToList(),
                 explanation = question.Explanation,
                 media = AttemptSnapshotFactory.MediaFor(question, MediaUrlFactory.For(_media, row.UserId))   // To-be T15
             };

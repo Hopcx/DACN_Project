@@ -23,5 +23,7 @@ namespace Project.Application.DTOs.QuestionDTO
     {
         public string Content { get; set; } = string.Empty;
         public bool IsCorrect { get; set; }
+        // To-be T17: vế phải của câu ghép cặp (loại 5; Content = vế trái). Loại 6: IsCorrect = mệnh đề đúng.
+        public string? MatchContent { get; set; }
     }
 }
