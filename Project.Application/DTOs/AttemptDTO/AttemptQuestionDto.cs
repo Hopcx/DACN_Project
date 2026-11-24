@@ -7,7 +7,10 @@ namespace Project.Application.DTOs.AttemptDTO;
 // To-be T17: Matches = vế phải của câu ghép cặp (loại 5), theo thứ tự đã xáo lúc chụp, Id riêng (không suy ra được cặp); loại khác null.
 public sealed record AttemptQuestionDto(Guid Id, int QuestionTypeId, string Content,
     IReadOnlyList<AttemptOptionDto> Options, IReadOnlyList<AttemptMediaDto>? Media = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<AttemptOptionDto>? Matches = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<AttemptOptionDto>? Matches = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? GroupId = null);
+// To-be T18: đoạn dùng chung (chữ + media URL ký cho đúng học viên); câu con trỏ tới qua GroupId.
+public sealed record AttemptGroupDto(Guid Id, string Title, string Content, IReadOnlyList<AttemptMediaDto> Media);
 public sealed record AttemptOptionDto(Guid Id, string Content);
 public sealed record AttemptMediaDto(Guid Id, string Kind, int? Width, int? Height, string Url);
 // To-be T16: Text = bài làm câu điền ngắn (loại 4; SelectedAnswerIds rỗng); loại 1–3 không gửi Text.

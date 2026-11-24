@@ -39,6 +39,7 @@ $suite = @(
     @{ Name = 'TaskToBeT15StudentMediaApiSmoke'; Browser = $false; Marker = 'TOBE_T15_STUDENT_MEDIA_SMOKE' },
     @{ Name = 'TaskToBeT16ShortAnswerApiSmoke'; Browser = $false; Marker = 'TOBE_T16_SHORT_ANSWER_SMOKE' },
     @{ Name = 'TaskToBeT17MatchingStatementsApiSmoke'; Browser = $false; Marker = 'TOBE_T17_MATCHING_STATEMENTS_SMOKE' },
+    @{ Name = 'TaskToBeT18QuestionGroupsApiSmoke'; Browser = $false; Marker = 'TOBE_T18_QUESTION_GROUPS_SMOKE' },
     @{ Name = 'TaskP1RoleRegressionSmoke';     Browser = $true;  Marker = 'P1_ROLE_REGRESSION_SMOKE' },
     @{ Name = 'TaskP4FrontendSmoke';           Browser = $true;  Marker = 'P4_FRONTEND_SMOKE' },
     @{ Name = 'TaskToBeT7PracticeFrontendSmoke'; Browser = $true; Marker = 'TOBE_T7_PRACTICE_FRONTEND_SMOKE' },
@@ -48,6 +49,7 @@ $suite = @(
     @{ Name = 'TaskToBeT15StudentMediaFrontendSmoke'; Browser = $true; Marker = 'TOBE_T15_STUDENT_MEDIA_FRONTEND_SMOKE' },
     @{ Name = 'TaskToBeT16ShortAnswerFrontendSmoke'; Browser = $true; Marker = 'TOBE_T16_SHORT_ANSWER_FRONTEND_SMOKE' },
     @{ Name = 'TaskToBeT17MatchingStatementsFrontendSmoke'; Browser = $true; Marker = 'TOBE_T17_MATCHING_STATEMENTS_FRONTEND_SMOKE' },
+    @{ Name = 'TaskToBeT18QuestionGroupsFrontendSmoke'; Browser = $true; Marker = 'TOBE_T18_QUESTION_GROUPS_FRONTEND_SMOKE' },
     @{ Name = 'TaskSessionRateLimitApiSmoke';  Browser = $false; Marker = 'SESSION_RATE_LIMIT_SMOKE' }
 )
 if ($Only.Count -gt 0) { $suite = @($suite | Where-Object { $Only -contains $_.Name }) }

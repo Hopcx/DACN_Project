@@ -49,8 +49,16 @@ public class QuestionExportController : ControllerBase
         var query = _db.Questions.AsNoTracking().Where(x => x.SubjectId == subjectId && x.Status != 255);
         if (questionTypeId.HasValue) query = query.Where(x => x.QuestionTypeId == questionTypeId.Value);
         if (questionLevelId.HasValue) query = query.Where(x => x.QuestionLevelId == questionLevelId.Value);
+        // To-be T18 (QT18-4): Excel chưa hỗ trợ đoạn dùng chung — câu thuộc đoạn bị bỏ qua, báo số câu qua header X-Skipped-Grouped
+        var skippedGrouped = await query.CountAsync(x => x.GroupId != null);
+        query = query.Where(x => x.GroupId == null);
         var total = await query.CountAsync();
-        if (total == 0) return NotFound(ApiResponse<string>.Fail("NO_QUESTIONS"));
+        if (total == 0)
+        {
+            // Review T18: mọi câu khớp bộ lọc đều thuộc đoạn → báo mã riêng (FE nói rõ Excel chưa hỗ trợ đoạn)
+            Response.Headers["X-Skipped-Grouped"] = skippedGrouped.ToString();
+            return NotFound(ApiResponse<string>.Fail(skippedGrouped > 0 ? "ONLY_GROUPED_QUESTIONS" : "NO_QUESTIONS"));
+        }
         if (total > MaxRows) return Conflict(ApiResponse<string>.Fail("EXPORT_TOO_LARGE"));
 
         var questions = await query.Include(x => x.Answers).OrderBy(x => x.Id).ToListAsync();
@@ -114,6 +122,7 @@ public class QuestionExportController : ControllerBase
         _audit.Add(User, "question.export", "Subject", subjectId.ToString(),
             $"Xuất {rows.Count} câu hỏi; questionTypeId={questionTypeId?.ToString() ?? "-"}; questionLevelId={questionLevelId?.ToString() ?? "-"}");
         await _db.SaveChangesAsync();
+        Response.Headers["X-Skipped-Grouped"] = skippedGrouped.ToString();
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             $"dacn-questions-v1-subject-{subjectId}.xlsx");
     }

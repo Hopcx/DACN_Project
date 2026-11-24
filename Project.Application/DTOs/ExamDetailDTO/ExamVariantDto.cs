@@ -36,6 +36,10 @@ public sealed class ExamQuestionOptionDto
     public string Content { get; set; } = string.Empty;
     public int? QuestionLevelId { get; set; }
     public string? QuestionLevelName { get; set; }
+    // To-be T18: đoạn dùng chung — chọn một câu con thì phải chọn cả đoạn
+    public int? GroupId { get; set; }
+    public int? GroupOrder { get; set; }
+    public string? GroupTitle { get; set; }
 }
 
 public sealed class ExamSubjectOptionDto

@@ -45,6 +45,8 @@ public class StudentAttemptController : ControllerBase
             serverNow = now, deadline = Utc(row.DeadlineUtc), revision = row.Revision,
             // To-be T15: media kèm URL ký cho chính học viên, chỉ khi còn đang làm (QT15-2)
             questions = finished ? Array.Empty<AttemptQuestionDto>() : AttemptSnapshotFactory.ForStudent(Snapshot(row), MediaUrlFactory.For(_media, row.UserId)),
+            // To-be T18: đoạn dùng chung, cùng điều kiện với câu hỏi (chỉ khi còn đang làm)
+            groups = finished ? Array.Empty<AttemptGroupDto>() : AttemptSnapshotFactory.GroupsForStudent(Snapshot(row), MediaUrlFactory.For(_media, row.UserId)),
             savedAnswers = finished ? Array.Empty<AttemptAnswerDto>() : Draft(row),
             result = finished && !voided && row.AllowViewResult && result != null
                 ? new { totalMark = result.TotalMark, isPassed = result.IsPassed,
@@ -143,6 +145,7 @@ public class StudentAttemptController : ControllerBase
             var shortAnswer = AnswerGrading.IsShortAnswer(question);
             return new {
             id = question.Id, questionTypeId = question.QuestionTypeId, content = question.Content,
+            groupId = question.GroupId,   // To-be T18
             selectedAnswerIds = answer.SelectedAnswerIds,
             // To-be T16: câu điền ngắn không có lựa chọn — trả bài làm + đáp án chấp nhận; mọi câu có isCorrect (cùng hàm với điểm)
             options = question.Options.Where(_ => !shortAnswer).Select(option => new {
@@ -164,7 +167,8 @@ public class StudentAttemptController : ControllerBase
         }).ToList();
         return Ok(ApiResponse<object>.Ok(new {
             attemptId = row.Id, state = row.State, reviewedFrom = "attemptSnapshot", snapshotVersion = snapshot.Version,
-            questions
+            questions,
+            groups = AttemptSnapshotFactory.GroupsForStudent(snapshot, MediaUrlFactory.For(_media, row.UserId))   // To-be T18
         }));
     }
 
@@ -206,6 +210,8 @@ public class StudentAttemptController : ControllerBase
             .Include(x => x.ExamDetailQuestions).ThenInclude(x => x.Question).ThenInclude(x => x.Answers)
             .Include(x => x.ExamDetailQuestions).ThenInclude(x => x.Question).ThenInclude(x => x.QuestionTags)
             .Include(x => x.ExamDetailQuestions).ThenInclude(x => x.Question).ThenInclude(x => x.QuestionMedia).ThenInclude(x => x.Media)
+            // To-be T18: đoạn dùng chung (chữ + media) của câu con
+            .Include(x => x.ExamDetailQuestions).ThenInclude(x => x.Question).ThenInclude(x => x.Group!).ThenInclude(x => x.Media).ThenInclude(x => x.Media)
             .AsSplitQuery()
             .OrderBy(x => x.Id).ToListAsync();
         if (variants.Count == 0) return Deny("NO_PUBLISHED_VARIANT");

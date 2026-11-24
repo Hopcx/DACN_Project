@@ -9,19 +9,24 @@ namespace Project.Domain.ValueObjects;
 // correct Options (never sent to students before review).
 // Version 6 (To-be T17): matching (type 5) options carry MatchId + MatchContent (right side, own Guid) and the question carries
 // MatchOrder (right sides shuffled once at capture); multi-statement (type 6) options are statements, IsCorrect = statement is true.
+// Version 7 (To-be T18): Groups = shared passages (text + media) captured at start; questions of a group carry GroupId (snapshot
+// group Guid) and are contiguous in GroupOrder.
 public sealed record AttemptSnapshot(int Version, int ExamId, int ExamDetailId, string ExamName,
-    string VariantCode, IReadOnlyList<AttemptQuestionSnapshot> Questions)
+    string VariantCode, IReadOnlyList<AttemptQuestionSnapshot> Questions, IReadOnlyList<AttemptGroupSnapshot>? Groups = null)
 {
-    public const int CurrentVersion = 6;
+    public const int CurrentVersion = 7;
 }
 
 // Optional fields are last so older JSON (v1 without Explanation, v1/v2 without ChapterId/TagIds) still deserializes.
 public sealed record AttemptQuestionSnapshot(Guid Id, int SourceQuestionId, int QuestionTypeId,
     string Content, double Point, IReadOnlyList<AttemptOptionSnapshot> Options, string? Explanation = null,
     int? ChapterId = null, IReadOnlyList<int>? TagIds = null, IReadOnlyList<AttemptMediaSnapshot>? Media = null,
-    AttemptShortAnswerSnapshot? ShortAnswer = null, IReadOnlyList<Guid>? MatchOrder = null);
+    AttemptShortAnswerSnapshot? ShortAnswer = null, IReadOnlyList<Guid>? MatchOrder = null, Guid? GroupId = null);
 
 public sealed record AttemptMediaSnapshot(Guid Id, string Kind, int? Width, int? Height);
+
+// To-be T18: đoạn dùng chung chụp lúc bắt đầu (Id = Guid mới của snapshot, SourceGroupId = QuestionGroups.Id).
+public sealed record AttemptGroupSnapshot(Guid Id, int SourceGroupId, string Title, string Content, IReadOnlyList<AttemptMediaSnapshot>? Media = null);
 
 // To-be T16: so khớp câu điền ngắn — bỏ dấu tiếng Việt; so số với sai số tuyệt đối (Tolerance ≥ 0, chỉ dùng khi Numeric).
 public sealed record AttemptShortAnswerSnapshot(bool IgnoreDiacritics, bool Numeric, decimal Tolerance);

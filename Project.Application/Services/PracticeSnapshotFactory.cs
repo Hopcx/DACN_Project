@@ -78,12 +78,14 @@ public static class PracticeSnapshotFactory
     /// <summary>Chụp snapshot theo đúng thứ tự câu truyền vào. Câu không dùng được → ArgumentException.</summary>
     public static AttemptSnapshot Create(int subjectId, IReadOnlyList<Question> questions)
     {
-        if (questions.Count is < MinQuestions or > MaxQuestions ||
+        // T18: số câu thực tế có thể vượt số yêu cầu để không cắt đoạn dùng chung (tối đa GroupedSelection.MaxPracticeQuestions)
+        if (questions.Count is < MinQuestions or > GroupedSelection.MaxPracticeQuestions ||
             questions.Select(x => x.Id).Distinct().Count() != questions.Count)
-            throw new ArgumentException("Phiên luyện tập phải có từ 1 đến 50 câu không trùng.");
+            throw new ArgumentException($"Phiên luyện tập phải có từ 1 đến {GroupedSelection.MaxPracticeQuestions} câu không trùng.");
         if (questions.Any(x => !IsUsable(x, subjectId)))
             throw new ArgumentException("Câu hỏi không dùng được cho luyện tập.");
-        return new AttemptSnapshot(AttemptSnapshot.CurrentVersion, 0, 0, PracticeName, PracticeCode,
-            Array.AsReadOnly(questions.Select(x => AttemptSnapshotFactory.BuildQuestion(x, 1)).ToArray()));
+        var built = Array.AsReadOnly(questions.Select(x => AttemptSnapshotFactory.BuildQuestion(x, 1)).ToArray());
+        var (grouped, groups) = AttemptSnapshotFactory.WithGroups(questions, built);
+        return new AttemptSnapshot(AttemptSnapshot.CurrentVersion, 0, 0, PracticeName, PracticeCode, grouped, groups);
     }
 }

@@ -10,6 +10,7 @@ namespace Project.Api.Controllers
 {
     [ApiController]
     [Authorize(Policy = "ExamManagement")]
+    [Project.Api.Services.DeadlockAsConflict]   // Review T18: lưu mã đề đồng thời với lưu đoạn
     [Route("web/exams")]
     [Microsoft.AspNetCore.Authorization.Authorize(Policy = "ExamManagement")]
     public class ExamController : ControllerBase

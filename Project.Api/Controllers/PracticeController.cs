@@ -92,13 +92,39 @@ public class PracticeController : ControllerBase
         return rows.Where(x => PracticeSnapshotFactory.IsUsable(x, criteria.SubjectId)).ToList();
     }
 
-    /// <summary>Review T15: chỉ nạp media cho các câu đã chọn (không nạp cho cả pool) trước khi chụp snapshot.</summary>
-    private async Task AttachMediaAsync(IReadOnlyList<Question> questions)
+    /// <summary>Review T15: chỉ nạp media cho các câu đã chọn (không nạp cho cả pool) trước khi chụp snapshot.
+    /// T18: nạp luôn đoạn dùng chung (chữ + media) của các câu con đã chọn.</summary>
+    private async Task<bool> AttachMediaAsync(IReadOnlyList<Question> questions)
     {
         var ids = questions.Select(x => x.Id).ToList();
         var media = await _db.QuestionMedia.AsNoTracking().Include(x => x.Media).Where(x => ids.Contains(x.QuestionId)).ToListAsync();
         var byQuestion = media.ToLookup(x => x.QuestionId);
         foreach (var question in questions) question.QuestionMedia = byQuestion[question.Id].ToList();
+        var groupIds = questions.Where(x => x.GroupId != null).Select(x => x.GroupId!.Value).Distinct().ToList();
+        if (groupIds.Count == 0) return true;
+        var groups = await _db.QuestionGroups.AsNoTracking().Include(x => x.Media).ThenInclude(x => x.Media)
+            .Where(x => groupIds.Contains(x.Id)).AsSplitQuery().ToDictionaryAsync(x => x.Id);
+        // Review T18: đoạn bị xóa giữa lúc chọn câu và lúc chụp → báo 409 cho học viên thử lại (không 500)
+        if (groupIds.Any(id => !groups.ContainsKey(id))) return false;
+        foreach (var question in questions.Where(x => x.GroupId != null)) question.Group = groups[question.GroupId!.Value];
+        return true;
+    }
+
+    /// <summary>
+    /// T18 (QT18-2/3): chia pool thành đơn vị — câu lẻ, hoặc cả đoạn khi đoạn đang hoạt động và pool có đủ MỌI câu con chưa xóa
+    /// (câu con bị ẩn/không dùng được/không khớp bộ lọc → bỏ cả đoạn).
+    /// </summary>
+    private async Task<List<IReadOnlyList<Question>>> UnitsAsync(IReadOnlyList<Question> pool) =>
+        GroupedSelection.Units(pool, x => x.GroupId, x => x.GroupOrder ?? 0, await GroupSizesAsync(pool));
+
+    /// <summary>T18: số câu con chưa xóa của các đoạn đang hoạt động có mặt trong <paramref name="questions"/>.</summary>
+    private async Task<Dictionary<int, int>> GroupSizesAsync(IEnumerable<Question> questions)
+    {
+        var groupIds = questions.Where(x => x.GroupId != null).Select(x => x.GroupId!.Value).Distinct().ToList();
+        return groupIds.Count == 0 ? new Dictionary<int, int>()
+            : await _db.Questions.AsNoTracking().Where(x => x.GroupId != null && groupIds.Contains(x.GroupId.Value) && x.Status != 255 &&
+                    _db.QuestionGroups.Any(g => g.Id == x.GroupId && g.Status == 1))
+                .GroupBy(x => x.GroupId!.Value).Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.Count);
     }
 
     private static ObjectResult NotEnough(int available, int requested) => new ConflictObjectResult(new ApiResponse<object>
@@ -126,6 +152,8 @@ public class PracticeController : ControllerBase
             criteria = JsonSerializer.Deserialize<JsonElement>(row.CriteriaJson),
             // Không có đáp án đúng, điểm hay lời giải trong DTO làm bài
             questions = AttemptSnapshotFactory.ForStudent(snapshot, MediaUrlFactory.For(_media, row.UserId)), answers = draft,
+            // To-be T18: đoạn dùng chung (chữ + media URL ký cho chủ phiên)
+            groups = AttemptSnapshotFactory.GroupsForStudent(snapshot, MediaUrlFactory.For(_media, row.UserId)),
             // To-be T6: chỉ câu đã chốt mới có đáp án đúng + lời giải
             @checked = PracticeCheck.Results(snapshot, draft, Checked(row))
         };
@@ -149,17 +177,22 @@ public class PracticeController : ControllerBase
         var tagIds = questions.SelectMany(x => x.QuestionTags.Select(t => t.TagId)).Distinct().ToList();
         var tags = await _db.Tags.AsNoTracking().Where(x => tagIds.Contains(x.Id) && x.Status == 1).OrderBy(x => x.Name)
             .Select(x => new { x.Id, x.Name }).ToListAsync();
+        // Review T18: đếm theo đơn vị (đoạn chỉ tính khi đủ câu con khớp bộ lọc) để khớp đúng số câu tạo phiên được
+        var sizes = await GroupSizesAsync(questions);
+        int Usable(IEnumerable<Question> filtered) => GroupedSelection.Units(filtered, x => x.GroupId, x => x.GroupOrder ?? 0, sizes).Sum(x => x.Count);
         var result = subjects.Select(subject =>
         {
             var pool = questions.Where(x => x.SubjectId == subject.Id).ToList();
             return new
             {
-                id = subject.Id, name = subject.Name, questionCount = pool.Count,
+                id = subject.Id, name = subject.Name, questionCount = Usable(pool),
+                // có đoạn dùng chung dùng được → FE báo trước "có thể nhiều hơn N câu"
+                hasGroups = GroupedSelection.Units(pool, x => x.GroupId, x => x.GroupOrder ?? 0, sizes).Any(u => u.Count > 1),
                 chapters = chapters.Where(x => x.SubjectId == subject.Id)
-                    .Select(x => new { id = x.Id, name = x.Name, questionCount = pool.Count(q => q.ChapterId == x.Id) }).ToList(),
-                levels = levels.Select(x => new { id = x.Id, name = x.Name, questionCount = pool.Count(q => q.QuestionLevelId == x.Id) })
+                    .Select(x => new { id = x.Id, name = x.Name, questionCount = Usable(pool.Where(q => q.ChapterId == x.Id)) }).ToList(),
+                levels = levels.Select(x => new { id = x.Id, name = x.Name, questionCount = Usable(pool.Where(q => q.QuestionLevelId == x.Id)) })
                     .Where(x => x.questionCount > 0).ToList(),
-                tags = tags.Select(x => new { id = x.Id, name = x.Name, questionCount = pool.Count(q => q.QuestionTags.Any(t => t.TagId == x.Id)) })
+                tags = tags.Select(x => new { id = x.Id, name = x.Name, questionCount = Usable(pool.Where(q => q.QuestionTags.Any(t => t.TagId == x.Id))) })
                     .Where(x => x.questionCount > 0).ToList()
             };
         }).ToList();
@@ -211,9 +244,12 @@ public class PracticeController : ControllerBase
         await FinalizeExpiredOfUserAsync(userId.Value);
         if (await OpenLimitAsync(userId.Value, criteria.Kind) is { } limited) { await tx.CommitAsync(); return limited; }
         var pool = await PoolAsync(criteria);
-        if (pool.Count < criteria.QuestionCount) { await tx.CommitAsync(); return NotEnough(pool.Count, criteria.QuestionCount); }
-        var picked = PracticeSnapshotFactory.Pick(pool, criteria.QuestionCount, Random.Shared);
-        await AttachMediaAsync(picked);
+        // T18 (QT18-3): chọn theo đơn vị (câu lẻ / cả đoạn); được vượt nhẹ để không cắt đoạn (≤ MaxPracticeQuestions)
+        var units = await UnitsAsync(pool);
+        var chosen = GroupedSelection.PickAtLeast(units, criteria.QuestionCount, Random.Shared);
+        if (chosen == null) { await tx.CommitAsync(); return NotEnough(units.Sum(x => x.Count), criteria.QuestionCount); }
+        var picked = chosen.SelectMany(x => x).ToList();
+        if (!await AttachMediaAsync(picked)) { await tx.CommitAsync(); return Conflict(ApiResponse<string>.Fail("QUESTION_GROUPS_CHANGED")); }
         var row = NewSession(userId.Value, criteria.SubjectId, criteria.RevealMode, criteria.Kind, criteria.DurationMinutes, criteria, null, picked);
         _db.PracticeSessions.Add(row);
         await MediaReferenceWriter.AddFromJsonAsync(_db, "practice", row.Id, row.SnapshotJson);   // To-be T15
@@ -372,13 +408,15 @@ public class PracticeController : ControllerBase
         if (row == null) return NotFound(ApiResponse<string>.Fail(NotFoundCode));
         if (row.State != "finished") return Deny("PRACTICE_NOT_FINISHED");
         var byQuestion = Draft(row).ToDictionary(x => x.QuestionId);
-        var questions = Snapshot(row).Questions.Select(question =>
+        var reviewSnapshot = Snapshot(row);
+        var questions = reviewSnapshot.Questions.Select(question =>
         {
             var answer = byQuestion.GetValueOrDefault(question.Id) ?? new AttemptAnswerDto(question.Id, Array.Empty<Guid>());
             var shortAnswer = AnswerGrading.IsShortAnswer(question);
             return new
             {
                 id = question.Id, questionTypeId = question.QuestionTypeId, content = question.Content,
+                groupId = question.GroupId,   // To-be T18
                 // To-be T16: cùng hàm chấm với điểm; câu điền ngắn trả bài làm + đáp án chấp nhận, không có lựa chọn
                 selectedAnswerIds = answer.SelectedAnswerIds, isCorrect = AnswerGrading.IsCorrect(question, answer),
                 text = shortAnswer ? answer.Text : null,
@@ -396,7 +434,8 @@ public class PracticeController : ControllerBase
         return Ok(ApiResponse<object>.Ok(new
         {
             id = row.Id, state = row.State, kind = row.Kind, revealMode = row.RevealMode, questionCount = row.QuestionCount,
-            correctCount = row.CorrectCount, finishedAtUtc = Utc(row.FinishedAtUtc), questions
+            correctCount = row.CorrectCount, finishedAtUtc = Utc(row.FinishedAtUtc), questions,
+            groups = AttemptSnapshotFactory.GroupsForStudent(reviewSnapshot, MediaUrlFactory.For(_media, row.UserId))   // To-be T18
         }));
     }
 
@@ -421,8 +460,11 @@ public class PracticeController : ControllerBase
         var pool = (await _db.Questions.AsNoTracking().Include(x => x.Answers).Include(x => x.QuestionTags).Include(x => x.QuestionMedia).ThenInclude(x => x.Media).Where(x => sourceIds.Contains(x.Id))
                 .AsSplitQuery().ToListAsync())
             .Where(x => PracticeSnapshotFactory.IsUsable(x, source.SubjectId)).ToList();
-        if (pool.Count == 0) { await tx.CommitAsync(); return NotEnough(0, sourceIds.Count); }
-        var picked = PracticeSnapshotFactory.Pick(pool, pool.Count, Random.Shared);
+        // T18: đoạn chỉ giữ khi còn đủ câu con hợp lệ; xáo theo đơn vị (đoạn liền khối)
+        var retryUnits = await UnitsAsync(pool);
+        if (retryUnits.Count == 0) { await tx.CommitAsync(); return NotEnough(0, sourceIds.Count); }
+        var picked = GroupedSelection.PickExact(retryUnits, retryUnits.Sum(x => x.Count), Random.Shared)!.SelectMany(x => x).ToList();
+        if (!await AttachMediaAsync(picked)) { await tx.CommitAsync(); return Conflict(ApiResponse<string>.Fail("QUESTION_GROUPS_CHANGED")); }
         var row = NewSession(userId.Value, source.SubjectId, source.RevealMode, source.Kind,
             source.Kind == PracticeSnapshotFactory.KindMock ? DurationOf(source) ?? PracticeTiming.SuggestedMinutes(picked.Count) : null,
             null, source.Id, picked);
