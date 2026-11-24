@@ -69,11 +69,12 @@ public class QuestionService : IQuestionService
             throw new BadRequestException("Lời giải tối đa 4000 ký tự.");
         if (string.IsNullOrWhiteSpace(dto.Content) || dto.Content.Trim().Length > 4000)
             throw new BadRequestException("Nội dung câu hỏi phải có từ 1 đến 4000 ký tự.");
-        if (dto.SubjectId <= 0 || dto.QuestionLevelId is <= 0 || dto.QuestionTypeId is < 1 or > ShortAnswerMatcher.QuestionTypeId)
-            throw new BadRequestException("Môn, loại và mức độ câu hỏi phải hợp lệ; chỉ hỗ trợ loại 1, 2, 3, 4.");
+        if (dto.SubjectId <= 0 || dto.QuestionLevelId is <= 0 || !QuestionKinds.IsSupported(dto.QuestionTypeId))
+            throw new BadRequestException("Môn, loại và mức độ câu hỏi phải hợp lệ; chỉ hỗ trợ loại 1–6.");
         if (dto.Status is not null and not 0 and not 1)
             throw new BadRequestException("Trạng thái chỉ nhận 0 hoặc 1.");
         if (dto.QuestionTypeId == ShortAnswerMatcher.QuestionTypeId) { ValidateShortAnswer(dto); return; }
+        if (QuestionKinds.HasItems(dto.QuestionTypeId)) { ValidateItems(dto); return; }
         if (dto.Answers == null || dto.Answers.Count < 2 || dto.Answers.Count > 20 ||
             dto.Answers.Any(x => string.IsNullOrWhiteSpace(x.Content) || x.Content.Trim().Length > 2000))
             throw new BadRequestException("Cần 2–20 đáp án, mỗi đáp án có nội dung từ 1 đến 2000 ký tự.");
@@ -88,6 +89,24 @@ public class QuestionService : IQuestionService
             throw new BadRequestException("Câu chọn một đáp án phải có đúng một đáp án đúng.");
         if (dto.QuestionTypeId == 3 && correct < 1)
             throw new BadRequestException("Câu chọn nhiều đáp án cần ít nhất một đáp án đúng.");
+    }
+
+    /// <summary>To-be T17 (QT17-2, QT17-3): loại 5 = 2–10 cặp (vế trái/vế phải 1–2000 ký tự, không trùng, không phân biệt hoa/thường);
+    /// loại 6 = 2–10 mệnh đề không trùng, Đúng/Sai tùy ý (có thể cùng đúng hoặc cùng sai).</summary>
+    private static void ValidateItems(QuestionCreateDto dto)
+    {
+        var matching = dto.QuestionTypeId == QuestionKinds.Matching;
+        var name = matching ? "cặp" : "mệnh đề";
+        if (dto.Answers == null || dto.Answers.Count < QuestionKinds.MinItems || dto.Answers.Count > QuestionKinds.MaxItems ||
+            dto.Answers.Any(x => x == null || string.IsNullOrWhiteSpace(x.Content) || x.Content.Trim().Length > 2000))
+            throw new BadRequestException($"Cần {QuestionKinds.MinItems}–{QuestionKinds.MaxItems} {name}, mỗi {name} có nội dung từ 1 đến 2000 ký tự.");
+        if (dto.Answers.Select(x => x.Content.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Count() != dto.Answers.Count)
+            throw new BadRequestException(matching ? "Vế trái của các cặp không được trùng." : "Nội dung mệnh đề không được trùng.");
+        if (!matching) return;
+        if (dto.Answers.Any(x => string.IsNullOrWhiteSpace(x.MatchContent) || x.MatchContent.Trim().Length > 2000))
+            throw new BadRequestException("Mỗi cặp cần vế phải từ 1 đến 2000 ký tự.");
+        if (dto.Answers.Select(x => x.MatchContent!.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Count() != dto.Answers.Count)
+            throw new BadRequestException("Vế phải của các cặp không được trùng.");
     }
 
     /// <summary>To-be T16 (QT16-3): 1–10 đáp án chấp nhận (đều đúng), mỗi đáp án 1–200 ký tự, không trùng sau chuẩn hóa;
@@ -122,9 +141,12 @@ public class QuestionService : IQuestionService
         ShortAnswerTolerance = dto.QuestionTypeId == ShortAnswerMatcher.QuestionTypeId && dto.ShortAnswerNumeric == true ? dto.ShortAnswerTolerance ?? 0 : null
     };
 
+    // T17: ghép cặp lưu vế phải ở MatchContent (IsCorrect = true cho mọi cặp); loại khác MatchContent = null
     private static List<Answer> BuildAnswers(QuestionCreateDto dto) => dto.Answers.Select(x => new Answer
     {
-        Content = x.Content.Trim(), IsCorrect = x.IsCorrect, Status = 1
+        Content = x.Content.Trim(), Status = 1,
+        IsCorrect = dto.QuestionTypeId == QuestionKinds.Matching || x.IsCorrect,
+        MatchContent = dto.QuestionTypeId == QuestionKinds.Matching ? x.MatchContent?.Trim() : null
     }).ToList();
 
     private static QuestionResponseDto Map(Question item) => new()
@@ -137,6 +159,6 @@ public class QuestionService : IQuestionService
         ShortAnswerIgnoreDiacritics = item.ShortAnswerIgnoreDiacritics, ShortAnswerNumeric = item.ShortAnswerNumeric,
         ShortAnswerTolerance = item.ShortAnswerTolerance,
         Answers = item.Answers.Where(x => x.Status != 255).OrderBy(x => x.Id).Select(x => new QuestionAnswerResponseDto
-        { Id = x.Id, Content = x.Content, IsCorrect = x.IsCorrect }).ToList()
+        { Id = x.Id, Content = x.Content, IsCorrect = x.IsCorrect, MatchContent = x.MatchContent }).ToList()
     };
 }

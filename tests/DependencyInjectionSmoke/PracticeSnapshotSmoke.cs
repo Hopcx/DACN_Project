@@ -39,7 +39,7 @@ internal static class PracticeSnapshotSmoke
             !PracticeSnapshotFactory.IsUsable(badSet, 1), "Invalid questions must be excluded.");
 
         var snapshot = PracticeSnapshotFactory.Create(1, new[] { multi, good });
-        Check(snapshot.Version == 5 && snapshot.ExamId == 0 && snapshot.ExamDetailId == 0 && snapshot.VariantCode == "PRACTICE",
+        Check(snapshot.Version == 6 && snapshot.ExamId == 0 && snapshot.ExamDetailId == 0 && snapshot.VariantCode == "PRACTICE",
             "Practice snapshot header.");
         Check(snapshot.Questions.Select(x => x.SourceQuestionId).SequenceEqual(new[] { 2, 1 }) &&
             snapshot.Questions.All(x => x.Point == 1), "Order kept and each question worth 1.");

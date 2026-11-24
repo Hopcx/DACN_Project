@@ -68,8 +68,8 @@ namespace Project.Api.Controllers
             return Ok(ApiResponse<string>.Ok($"Xóa Question type với ID {id} thành công"));
         }
 
-        // Review T16: loại 1–4 (Đúng/Sai, Một đáp án, Nhiều đáp án, Điền ngắn) gắn với cách chấm trong code — không sửa, tắt hay xóa được
+        // Review T16 (T17: 1–6): loại hệ thống gắn với cách chấm trong code — không sửa, tắt hay xóa được
         private const string SystemTypeMessage = "Loại câu hỏi hệ thống không thể sửa hoặc xóa.";
-        private static bool IsSystemType(int id) => id is >= 1 and <= Project.Application.Services.ShortAnswerMatcher.QuestionTypeId;
+        private static bool IsSystemType(int id) => id is >= 1 and <= Project.Application.Services.QuestionKinds.Max;
     }
 }

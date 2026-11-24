@@ -28,6 +28,7 @@ namespace Project.Application.DTOs.QuestionDTO
         public int Id { get; set; }
         public string Content { get; set; } = string.Empty;
         public bool IsCorrect { get; set; }
+        public string? MatchContent { get; set; }   // To-be T17: vế phải (loại 5)
     }
 
     public class QuestionSubjectDto

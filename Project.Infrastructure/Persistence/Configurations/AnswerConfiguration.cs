@@ -19,6 +19,9 @@ namespace Project.Infrastructure.Persistence.Configurations
                   .WithMany(p => p.Answers)
                   .HasForeignKey(d => d.QuestionId)
                   .OnDelete(DeleteBehavior.Restrict);
+
+            // To-be T17: vế phải của câu ghép cặp (loại 5)
+            entity.Property(e => e.MatchContent).HasMaxLength(2000);
         }
     }
 

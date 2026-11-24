@@ -43,6 +43,10 @@ namespace Project.Infrastructure.Migrations
                     b.Property<bool>("IsCorrect")
                         .HasColumnType("bit");
 
+                    b.Property<string>("MatchContent")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
                     b.Property<int>("QuestionId")
                         .HasColumnType("int");
 

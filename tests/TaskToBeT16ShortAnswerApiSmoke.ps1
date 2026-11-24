@@ -152,7 +152,7 @@ SELECT CONCAT(@e,'|',@sc);
     $s1 = $byContent["T16 thủ đô $tag"]; $s2 = $byContent["T16 gia tốc $tag"]; $sc = $byContent["T16 câu chọn $tag"]
     Expect "$($s1.questionTypeId)|$(@($s1.options).Count)|$(@($s2.options).Count)|$(@($sc.options).Count)" '4|0|0|2' 'short answer has no options'
     if ($start.raw -match 'Thăng Long|Th\\u0103ng|"9\.8"|isCorrect|acceptedAnswers') { throw 'Attempt DTO leaked accepted answers' }
-    Expect (Sql "SELECT CONCAT(JSON_VALUE(SnapshotJson,'$.version'),'|',(SELECT COUNT(*) FROM OPENJSON(SnapshotJson,'$.questions') WHERE JSON_QUERY([value],'$.shortAnswer') IS NOT NULL)) FROM dbo.ExamAttempts WHERE Id='$attempt';") '5|2' 'snapshot v5 + rules'
+    Expect (Sql "SELECT CONCAT(JSON_VALUE(SnapshotJson,'$.version'),'|',(SELECT COUNT(*) FROM OPENJSON(SnapshotJson,'$.questions') WHERE JSON_QUERY([value],'$.shortAnswer') IS NOT NULL)) FROM dbo.ExamAttempts WHERE Id='$attempt';") '6|2' 'snapshot v6 + rules'
     $okChoice = @($sc.options | Where-Object content -eq 'OK')[0].id
     $rev = $start.body.data.revision
     Expect (Call 'PUT' "/web/attempts/$attempt/answers" $tokenA @{ revision = $rev; answers = @(@{ questionId = $s1.id; selectedAnswerIds = @($okChoice) }) }).status 400 'short answer with selected ids'

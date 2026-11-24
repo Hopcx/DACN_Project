@@ -66,10 +66,18 @@ public class QuestionExportController : ControllerBase
 
             if (question.QuestionLevelId is null or <= 0) Add("LEVEL_MISSING", "Câu hỏi chưa có mức độ");
             var isShort = question.QuestionTypeId == ShortAnswerMatcher.QuestionTypeId;   // To-be T16
-            if (question.QuestionTypeId is < 1 or > ShortAnswerMatcher.QuestionTypeId) Add("TYPE_UNSUPPORTED", "Chỉ xuất được loại câu hỏi 1, 2, 3, 4");
+            var isMatching = question.QuestionTypeId == QuestionKinds.Matching;           // To-be T17
+            if (!QuestionKinds.IsSupported(question.QuestionTypeId)) Add("TYPE_UNSUPPORTED", "Chỉ xuất được loại câu hỏi 1–6");
             if (content.Length is < 1 or > 4000) Add("CONTENT_LENGTH", "Nội dung cần 1–4000 ký tự");
-            if (isShort ? answers.Count is < 1 or > ShortAnswerMatcher.MaxAccepted : answers.Count is < 2 or > 20)
-                Add("ANSWER_COUNT", isShort ? "Câu điền ngắn cần 1–10 đáp án chấp nhận" : "Cần 2–20 đáp án");
+            if (isShort ? answers.Count is < 1 or > ShortAnswerMatcher.MaxAccepted
+                : QuestionKinds.HasItems(question.QuestionTypeId) ? answers.Count is < QuestionKinds.MinItems or > QuestionKinds.MaxItems
+                : answers.Count is < 2 or > 20)
+                Add("ANSWER_COUNT", isShort ? "Câu điền ngắn cần 1–10 đáp án chấp nhận"
+                    : QuestionKinds.HasItems(question.QuestionTypeId) ? "Cần 2–10 cặp/mệnh đề" : "Cần 2–20 đáp án");
+            // T17: vế phải của cặp cũng ghi vào cột E ("trái => phải"), nên không được chứa ";" hay "=>"
+            if (isMatching && answers.Any(x => string.IsNullOrWhiteSpace(x.MatchContent) || x.MatchContent.Contains(';') ||
+                x.MatchContent.Contains("=>") || x.Content.Contains("=>") || x.MatchContent != x.MatchContent.Trim() || HasInvalidXmlChar(x.MatchContent)))
+                Add("ANSWER_SEPARATOR", "Cặp ghép thiếu vế phải hoặc chứa dấu chấm phẩy, \"=>\", khoảng trắng đầu cuối hay ký tự không hợp lệ");
             if (answers.Any(x => x.Content.Contains(';'))) Add("ANSWER_SEPARATOR", "Đáp án chứa dấu chấm phẩy");
             if (answers.Any(x => x.Content.Trim().Length is < 1 or > 2000)) Add("ANSWER_LENGTH", "Đáp án cần 1–2000 ký tự");
             if (answers.Any(x => x.Content != x.Content.Trim())) Add("ANSWER_WHITESPACE", "Đáp án có khoảng trắng đầu hoặc cuối");
@@ -79,7 +87,7 @@ public class QuestionExportController : ControllerBase
             {
                 var dto = new QuestionCreateDto { SubjectId = question.SubjectId, QuestionLevelId = question.QuestionLevelId,
                     QuestionTypeId = question.QuestionTypeId, Content = content, Status = 1,
-                    Answers = answers.Select(x => new QuestionAnswerInputDto { Content = x.Content, IsCorrect = x.IsCorrect }).ToList(),
+                    Answers = answers.Select(x => new QuestionAnswerInputDto { Content = x.Content, IsCorrect = x.IsCorrect, MatchContent = x.MatchContent }).ToList(),
                     ShortAnswerIgnoreDiacritics = question.ShortAnswerIgnoreDiacritics, ShortAnswerNumeric = question.ShortAnswerNumeric,
                     ShortAnswerTolerance = question.ShortAnswerNumeric == true ? question.ShortAnswerTolerance : null };
                 try { QuestionService.Validate(dto); }
@@ -91,8 +99,9 @@ public class QuestionExportController : ControllerBase
             var correct = answers.Select((answer, i) => (answer, Index: i + 1)).Where(x => x.answer.IsCorrect)
                 .Select(x => x.Index.ToString());
             rows.Add([question.SubjectId.ToString(), question.QuestionLevelId!.Value.ToString(),
-                question.QuestionTypeId.ToString(), content, string.Join(";", answers.Select(x => x.Content)),
-                isShort ? "" : string.Join(",", correct),
+                question.QuestionTypeId.ToString(), content,
+                string.Join(";", answers.Select(x => isMatching ? $"{x.Content} => {x.MatchContent}" : x.Content)),
+                isShort || isMatching ? "" : string.Join(",", correct),
                 isShort ? ShortAnswerOptions.Format(question.ShortAnswerIgnoreDiacritics, question.ShortAnswerNumeric, question.ShortAnswerTolerance) : ""]);
         }
         if (errors.Count > 0) return Conflict(new ApiResponse<object>
