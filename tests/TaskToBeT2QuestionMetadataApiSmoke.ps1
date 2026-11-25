@@ -140,6 +140,12 @@ SELECT '$($row[0])',N'T2 $($row[1])',N't2$($row[1])$tag',N't2$($row[1])$tag@exam
     if (@($f.data.data).Count -ne 2) { throw "Lọc nhiều tag + mức độ phải ra 2 câu, nhận $(@($f.data.data).Count)" }
     $f = Call 'GET' "/web/questions?subjectId=$subjectA&tagIds=$t1Id&questionLevelId=1" $qman
     if (@($f.data.data).Count -ne 0) { throw 'Lọc tag + mức độ khác phải rỗng.' }
+    # Tổng kiểm (nợ T2 N-5): tối đa 50 tag trong bộ lọc
+    $many = (1..51 | ForEach-Object { "tagIds=$_" }) -join '&'
+    $f = Call 'GET' "/web/questions?subjectId=$subjectA&$many" $qman
+    if ($f.status -ne 400 -or $f.data.message -notmatch "tối đa 50 tag") { throw "Lọc 51 tag phải 400 (tối đa 50 tag), nhận $($f.status) $($f.data.message)" }
+    $dup = (1..51 | ForEach-Object { "tagIds=$t1Id" }) -join "&"
+    Expect (Call "GET" "/web/questions?subjectId=$subjectA&$dup" $qman).status 200 "51 lần cùng một tag (sau loại trùng là 1)"
     Expect (Call 'GET' '/web/questions?chapterId=-1' $qman).status 400 'chapterId âm'
     Expect (Call 'GET' '/web/questions?tagIds=0' $qman).status 400 'tagIds 0'
 

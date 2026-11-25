@@ -88,3 +88,47 @@ Lưu ý khi chốt: API bật `UseHttpsRedirection`, nên probe health gọi b�
 - **To-be T16 (migration `ToBeT16ShortAnswer`)**: thêm loại câu 4 "Điền ngắn" (chỉ chèn khi chưa có Id 4), 3 cột tùy chọn trên `Questions` và `QuestionOutcomes.AnswerText`; snapshot v5. **Rollback bị chặn khi đã có câu loại 4** (THROW 50016) — muốn rollback phải xóa/đổi các câu đó trước. File Excel câu hỏi có thêm cột G `ShortAnswerOptions` (tùy chọn; file 6 cột cũ vẫn nhập được).
 - **To-be T17 (migration `ToBeT17MatchingStatements`)**: thêm loại câu 5 "Ghép cặp" và 6 "Đúng/Sai nhiều mệnh đề" (dừng nếu Id 5/6 đã dùng cho loại khác, THROW 50017) và cột `Answers.MatchContent`; snapshot v6 (vế phải có Id riêng, xáo khi bắt đầu bài). **Rollback bị chặn khi đã có câu loại 5/6** (THROW 50018). Excel: ghép cặp ghi `vế trái => vế phải; …` ở cột Answers, CorrectIndexes để trống; nhiều mệnh đề ghi chỉ số mệnh đề đúng (để trống nếu tất cả sai).
 - **To-be T18 (migration `ToBeT18QuestionGroups`)**: bảng `QuestionGroups` (đoạn dùng chung) và `QuestionGroupMedia`, cột `Questions.GroupId/GroupOrder` (FK Restrict, check cùng có/cùng NULL); snapshot v7 chụp đoạn (chữ + media). **Media của đoạn cũng phải sao lưu cùng thư mục media** (đếm vào tham chiếu, không bị coi là mồ côi). **Rollback bị chặn khi đã có đoạn** (THROW 50019). Excel chưa hỗ trợ đoạn: xuất bỏ qua câu thuộc đoạn (header `X-Skipped-Grouped`).
+
+## 9. Lưu trữ và dọn dữ liệu (Q15 — đợt tổng kiểm 25/11/2026)
+Chính sách hiện tại: **không xóa tự động** bất kỳ dữ liệu nào. Phần dưới đây là cách đo dung lượng và dọn tay an toàn khi cần.
+
+**Đo dung lượng** (chỉ đọc):
+```sql
+-- 15 bảng lớn nhất: số dòng lấy từ heap/clustered index; dung lượng tính mọi index (gồm LOB của nvarchar(max))
+SELECT TOP 15 OBJECT_NAME(s.object_id) AS name,
+  SUM(CASE WHEN s.index_id < 2 THEN s.row_count END) AS rows,
+  SUM(s.reserved_page_count) * 8 / 1024 AS mb
+FROM sys.dm_db_partition_stats s JOIN sys.tables t ON t.object_id = s.object_id
+GROUP BY s.object_id ORDER BY mb DESC;
+-- Media: số file và tổng byte (thư mục Media:RootPath phải tương ứng)
+SELECT COUNT(*) AS files, SUM(SizeBytes) / 1048576 AS mb FROM dbo.MediaFiles;
+```
+Thư mục media đo bằng `Get-ChildItem <Media:RootPath> -Recurse -File | Measure-Object Length -Sum`. **Sao lưu DB và thư mục media cùng thời điểm**: file và dòng `MediaFiles` phải khớp nhau.
+
+**Không được xóa** (bài làm và báo cáo dựa trên các bảng này; nhiều FK là Restrict):
+- `ExamAttempts`, `ExamAttemptSubmissions`: snapshot, điểm, lượt bị hủy.
+- `PracticeSessions`: chỉ học viên tự bỏ phiên đang làm qua API.
+- `QuestionOutcomes`: phân tích, báo cáo lớp. Dữ liệu cũ được worker bù tạo lại khi thiếu, nhưng xóa thì mất lịch sử phân loại. Lưu ý FK `QuestionOutcomes→Users` là Cascade: xóa cứng user sẽ kéo theo outcome của họ.
+- `MediaReferences`: tham chiếu từ snapshot; xóa thì media còn dùng sẽ bị coi là mồ côi.
+- `Questions`/`Answers` đã vào đề: chỉ ẩn (Status 255) qua API.
+- `QuestionGroups`/`QuestionGroupMedia`: đoạn đã vào đề bị khóa; chỉ ẩn được.
+- `Users`: dùng khóa/tắt tài khoản thay vì xóa cứng (FK Restrict từ bài làm, media, cờ xem lại).
+
+**Có thể dọn tay** (sau khi đã sao lưu, ngoài giờ thi):
+- **Media mồ côi:** dùng trang Admin "Media mồ côi". Trang này xóa cả dòng lẫn file và ghi audit `media.delete`. Không xóa thẳng bằng SQL, vì file trên đĩa sẽ còn lại.
+- **Nhật ký `Logs`:** có thể xóa bản ghi cũ hơn N tháng nếu nhà trường cho phép:
+  ```sql
+  DELETE TOP (10000) FROM dbo.Logs WHERE CreatedAtUtc < DATEADD(month, -12, SYSUTCDATETIME());
+  ```
+  Chạy lặp cho tới khi hết. Audit là bằng chứng thao tác (xuất dữ liệu, hủy lượt, xóa media), nên hỏi người có thẩm quyền trước khi xóa.
+  - `CreatedAtUtc` chỉ có từ migration P4 (cột nullable). Log ghi trước P4 mang giá trị NULL nên lệnh trên **không** xóa chúng. Bảng không có cột thời gian nào khác, nên không xác định được tuổi của các dòng này. Đếm bằng `SELECT COUNT(*) FROM dbo.Logs WHERE CreatedAtUtc IS NULL`; muốn dọn thì người có thẩm quyền quyết theo `Id` (Id nhỏ hơn = cũ hơn).
+- **Token hết hạn quá 30 ngày** (mọi cột đều lưu giờ UTC):
+  ```sql
+  DELETE TOP (10000) FROM dbo.RefreshTokens WHERE ExpiryDate < DATEADD(day, -30, SYSUTCDATETIME());
+  DELETE TOP (10000) FROM dbo.BlackListTokens WHERE ExpiryDate < DATEADD(day, -30, SYSUTCDATETIME());
+  DELETE TOP (10000) FROM dbo.EmailVerificationTokens WHERE ExpiresAt < DATEADD(day, -30, SYSUTCDATETIME());
+  ```
+  Token đã hết hạn không còn dùng được, nên xóa không ảnh hưởng người dùng. `BlackListTokens` chỉ cần giữ tới khi JWT tương ứng hết hạn.
+- **File maildrop** trong Development (`Project.Api/.maildrop`).
+
+Muốn xóa tự động theo lịch thì cần chốt lại Q15: bảng nào, giữ bao lâu, ai duyệt. Khi đó làm một lát riêng có worker, cấu hình và audit.

@@ -1,8 +1,10 @@
+using System.Data;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Project.Api.Services;
 using Project.Application.Common;
 using Project.Application.Services;
 using Project.Domain.Entities;
@@ -29,18 +31,23 @@ public class ReviewFlagController : ControllerBase
 
     private Guid? Actor() => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
 
+    // Snapshot JSON của nguồn nếu người gọi là chủ (lượt thi: còn là thành viên đã duyệt của lớp đang hoạt động)
+    private IQueryable<string> SourceJson(string kind, Guid sourceId, Guid userId) => kind == ReviewFlagRules.Exam
+        ? _db.ExamAttempts.AsNoTracking().Where(x => x.Id == sourceId && x.UserId == userId &&
+                _db.ClassExamSchedules.Any(link => link.ExamScheduleId == x.ExamScheduleId && link.Class.Status == 1 &&
+                    link.Class.ClassUsers.Any(member => member.UserId == userId && member.Status == 1)))
+            .Select(x => x.SnapshotJson)
+        : _db.PracticeSessions.AsNoTracking().Where(x => x.Id == sourceId && x.UserId == userId).Select(x => x.SnapshotJson);
+
     // Snapshot của nguồn nếu người gọi là chủ; không có → null (404)
     private async Task<AttemptSnapshot?> SourceSnapshotAsync(string kind, Guid sourceId, Guid userId)
     {
-        var json = kind == ReviewFlagRules.Exam
-            ? await _db.ExamAttempts.AsNoTracking().Where(x => x.Id == sourceId && x.UserId == userId &&
-                    _db.ClassExamSchedules.Any(link => link.ExamScheduleId == x.ExamScheduleId && link.Class.Status == 1 &&
-                        link.Class.ClassUsers.Any(member => member.UserId == userId && member.Status == 1)))
-                .Select(x => x.SnapshotJson).FirstOrDefaultAsync()
-            : await _db.PracticeSessions.AsNoTracking().Where(x => x.Id == sourceId && x.UserId == userId)
-                .Select(x => x.SnapshotJson).FirstOrDefaultAsync();
+        var json = await SourceJson(kind, sourceId, userId).FirstOrDefaultAsync();
         return json == null ? null : JsonSerializer.Deserialize<AttemptSnapshot>(json, Json);
     }
+
+    // Tổng kiểm (nợ T8 N6): chỉ cần biết nguồn còn và thuộc người gọi — không kéo/giải mã snapshot
+    private Task<bool> SourceExistsAsync(string kind, Guid sourceId, Guid userId) => SourceJson(kind, sourceId, userId).AnyAsync();
 
     private IQueryable<ReviewFlag> Flags(Guid userId, string kind, Guid sourceId) =>
         _db.ReviewFlags.Where(x => x.UserId == userId && x.SourceKind == kind && x.SourceId == sourceId);
@@ -69,6 +76,11 @@ public class ReviewFlagController : ControllerBase
     {
         var userId = Actor(); if (userId == null) return Unauthorized();
         var (kind, error) = Validate(request.SourceKind, request.SourceId); if (error != null) return error;
+        // Tổng kiểm (nợ T8 N4): phiên luyện tập có thể bị bỏ (xóa cùng cờ) đúng lúc đang đánh dấu. Lấy app lock theo học viên
+        // như DELETE /web/student/practice/{id} để hai thao tác xếp hàng: kiểm nguồn + ghi cờ thấy đúng trạng thái sau khi
+        // bỏ phiên, không phụ thuộc mức cô lập (kể cả khi bật RCSI). Lượt thi không bao giờ bị xóa nên không cần khóa.
+        await using var tx = kind == ReviewFlagRules.Practice ? await _db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted) : null;
+        if (tx != null) await PracticeFinalizer.LockAsync(_db, userId.Value);
         var snapshot = await SourceSnapshotAsync(kind!, request.SourceId, userId.Value);
         if (snapshot == null) return NotFound(ApiResponse<string>.Fail("REVIEW_FLAG_SOURCE_NOT_FOUND"));
         if (!ReviewFlagRules.HasQuestion(snapshot, request.QuestionId))
@@ -80,10 +92,12 @@ public class ReviewFlagController : ControllerBase
                 UserId = userId.Value, SourceKind = kind!, SourceId = request.SourceId,
                 SnapshotQuestionId = request.QuestionId, CreatedAtUtc = DateTime.UtcNow
             });
-            // Hai request đánh dấu cùng lúc: PK chặn bản thứ hai — coi như đã đánh dấu (idempotent)
+            // Hai request đánh dấu lượt thi cùng lúc: PK chặn bản thứ hai — coi như đã đánh dấu (idempotent).
+            // Lỗi trùng khóa chỉ hủy câu lệnh, không hủy transaction (XACT_ABORT tắt).
             try { await _db.SaveChangesAsync(); }
             catch (DbUpdateException ex) when (ex.InnerException is Microsoft.Data.SqlClient.SqlException { Number: 2627 or 2601 }) { }
         }
+        if (tx != null) await tx.CommitAsync();
         return Ok(ApiResponse<object>.Ok(new { sourceKind = kind, sourceId = request.SourceId, questionId = request.QuestionId, flagged = true }));
     }
 
@@ -92,7 +106,7 @@ public class ReviewFlagController : ControllerBase
     {
         var userId = Actor(); if (userId == null) return Unauthorized();
         var (kind, error) = Validate(sourceKind, sourceId); if (error != null) return error;
-        if (await SourceSnapshotAsync(kind!, sourceId, userId.Value) == null)
+        if (!await SourceExistsAsync(kind!, sourceId, userId.Value))
             return NotFound(ApiResponse<string>.Fail("REVIEW_FLAG_SOURCE_NOT_FOUND"));
         await Flags(userId.Value, kind!, sourceId).Where(x => x.SnapshotQuestionId == questionId).ExecuteDeleteAsync();
         return Ok(ApiResponse<object>.Ok(new { sourceKind = kind, sourceId, questionId, flagged = false }));
