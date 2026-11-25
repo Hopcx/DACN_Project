@@ -11,6 +11,9 @@ namespace Project.Application.DTOs.QuestionDTO
         public int QuestionTypeId { get; set; }
         public int? QuestionLevelId { get; set; }
         public bool IsUsedInExam { get; set; }
+        /// <summary>T19 (nợ L2): trạng thái trước khi sửa, chỉ dùng nội bộ để phân loại audit — không trả cho client.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public byte? PreviousStatus { get; set; }
         public int? ChapterId { get; set; }
         public string? Explanation { get; set; }
         public List<int> TagIds { get; set; } = new();

@@ -35,7 +35,8 @@ Bổ sung cho `04-current-endpoints.md`. Mọi route có prefix `/web` và trả
 
 ## Ngân hàng câu hỏi (T1–T3, T14, T16–T18)
 - `GET /web/questions` — QuestionManagement.
-  - Lọc: `textSearch`, `subjectId`, `questionTypeId`, `questionLevelId`, `chapterId`, `tagIds` (lặp tham số).
+  - Lọc: `textSearch`, `subjectId`, `questionTypeId`, `questionLevelId`, `chapterId`, `tagIds` (lặp tham số, tối đa 50 tag khác nhau). ID ≤ 0 → 400.
+  - **Phân trang (T19):** gửi `page` (≥ 1) và/hoặc `pageSize` (1–100, mặc định 20) thì `data` là `{ page, pageSize, totalCount, items }`, sắp theo `id`; sai → 400. Không gửi hai tham số này thì `data` vẫn là mảng toàn bộ câu khớp bộ lọc (tương thích ngược, dùng cho chọn câu con của đoạn).
   - Mỗi câu có `chapterId`, `explanation`, `tagIds`, `mediaCount`, `shortAnswer*` (loại 4), `answers[].matchContent` (loại 5), `groupId`/`groupOrder`/`groupTitle` (T18), `isUsedInExam`.
 - `GET /web/questions/{id}` — QuestionManagement.
 - `GET /web/questions/subjects` — QuestionManagement.
@@ -46,9 +47,10 @@ Bổ sung cho `04-current-endpoints.md`. Mọi route có prefix `/web` và trả
   - Loại 4: 1–10 đáp án chấp nhận, mỗi đáp án ≤ 200 ký tự, không trùng sau chuẩn hóa; `shortAnswerIgnoreDiacritics`, `shortAnswerNumeric`, `shortAnswerTolerance` (0..1e9, ≤ 6 chữ số thập phân, chỉ khi bật so số).
   - Loại 5: 2–10 cặp; vế trái và `matchContent` 1–2000 ký tự, không trùng.
   - Loại 6: 2–10 mệnh đề, `isCorrect` = mệnh đề đúng.
-  - Sai → 400.
-- `PUT /web/questions/{id}` — QuestionManagement. Thay toàn bộ câu.
+  - Sai → 400. Chương (tồn tại, chưa ẩn, cùng môn) và tag (đang hoạt động; riêng khi sửa, tag đã gắn sẵn với câu thì được giữ dù đã ẩn) được kiểm lại trong transaction lưu (T19): chương bị ẩn hoặc tag bị tắt trước khi transaction đọc → 400; ẩn chương/tắt tag sau đó phải chờ transaction lưu xong. Deadlock (chủ yếu hai PUT cùng sửa một câu) → 409 `CONCURRENCY_CONFLICT`.
+- `PUT /web/questions/{id}` — QuestionManagement. Thay toàn bộ câu; kiểm như POST.
   - Câu đã vào đề hoặc đã có bài làm → 409.
+  - Audit `question.restore` khi câu đang ẩn (255) được lưu với trạng thái 1; còn lại `question.update`.
   - Câu con của đoạn đổi môn → 400.
 - `DELETE /web/questions/{id}` — QuestionManagement. Ẩn câu (Status 255).
   - Câu đã dùng hoặc đang thuộc đoạn → 409.
@@ -60,7 +62,7 @@ Bổ sung cho `04-current-endpoints.md`. Mọi route có prefix `/web` và trả
   - Mã lỗi theo dòng: `TYPE_ID`, `ANSWERS`, `CORRECT_INDEXES`, `SHORT_ANSWER_OPTIONS`, `DUPLICATE_FILE`, `DUPLICATE_DB`…
 - `GET /web/questions/export` — QuestionManagement. `subjectId` bắt buộc; `questionTypeId` và `questionLevelId` tùy chọn.
   - Câu thuộc đoạn bị bỏ qua, có header `X-Skipped-Grouped`.
-  - Mã lỗi: `NO_QUESTIONS`, `ONLY_GROUPED_QUESTIONS`, `EXPORT_TOO_LARGE`; 409 kèm `errors[]` theo từng câu.
+  - Mã lỗi: `NO_QUESTIONS`, `ONLY_GROUPED_QUESTIONS`, `EXPORT_TOO_LARGE`; 409 kèm `errors[] { questionId, code, message, content }` theo từng câu (`content` = tối đa 120 ký tự đầu của câu, T19).
   - Có audit `question.export`.
 - `GET /web/question-types` — QuestionManagement.
 - `GET /web/question-types/{id}` — QuestionManagement.
@@ -153,7 +155,7 @@ Bổ sung cho `04-current-endpoints.md`. Mọi route có prefix `/web` và trả
   - Thi thử: bắt buộc `durationMinutes` 5–180, chỉ có `revealMode = end`.
   - Số câu thực tế có thể vượt yêu cầu để không cắt đoạn, tối đa 59.
   - Mã lỗi: `PRACTICE_NOT_ENOUGH_QUESTIONS` (409, kèm `available`), `QUESTION_GROUPS_CHANGED` (409), giới hạn số phiên đang mở (409).
-- `GET /web/student/practice/mine` — Student.
+- `GET /web/student/practice/mine` — Student. Phân trang `page`/`pageSize`; mỗi phiên có `state` (`expired` = thi thử quá hạn chưa chốt), `checkedCount` và `durationSeconds`: đã nộp = nộp − tạo; `expired` = hạn − tạo (đúng thời lượng được cấp, T19); đang làm = null.
 - `GET /web/student/practice/{id:guid}` — Student, chỉ chủ phiên. Trả `questions`, `groups`, `answers` và `checked`.
 - `PUT /web/student/practice/{id:guid}/answers` — Student. Câu đã chốt bị đổi → `PRACTICE_QUESTION_LOCKED`.
 - `POST /web/student/practice/{id:guid}/questions/{questionId:guid}/check` — Student. Chỉ cho `perQuestion`, nếu không → `PRACTICE_CHECK_NOT_ALLOWED`.

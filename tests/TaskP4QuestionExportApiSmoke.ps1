@@ -155,6 +155,7 @@ INSERT dbo.Answers(QuestionId,Content,IsCorrect,Status) VALUES (@q,N'A',1,1),(@q
     $r = Call 'GET' "/web/questions/export?subjectId=$subject" $adminToken
     Expect $r.status 409 'level missing'; Expect $r.body.data.exported 0 'exported 0'
     $hit = @($r.body.data.errors | Where-Object { $_.questionId -eq $bad -and $_.code -eq 'LEVEL_MISSING' }); Expect $hit.Count 1 'LEVEL_MISSING for the bad question'
+    Expect $hit[0].content "P4 export $tag không mức" 'error carries question content (T19, ngân hàng phân trang)'
     Sql "UPDATE dbo.Questions SET QuestionLevelId=$levelId WHERE Id=$bad; UPDATE dbo.Answers SET Content=N'a;b' WHERE QuestionId=$bad AND IsCorrect=1;" | Out-Null
     $r = Call 'GET' "/web/questions/export?subjectId=$subject" $adminToken
     Expect $r.status 409 'separator'

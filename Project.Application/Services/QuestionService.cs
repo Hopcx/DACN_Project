@@ -14,13 +14,32 @@ public class QuestionService : IQuestionService
     public async Task<List<QuestionResponseDto>> GetAllAsync(string? textSearch, int? subjectId, int? questionTypeId, int? questionLevelId,
         int? chapterId = null, IReadOnlyCollection<int>? tagIds = null)
     {
+        ValidateFilter(subjectId, questionTypeId, questionLevelId, chapterId, tagIds);
+        var items = await _repository.GetAllQuestionsAsync(textSearch, subjectId, questionTypeId, questionLevelId, chapterId, tagIds);
+        return items.Select(Map).ToList();
+    }
+
+    public const int MaxPageSize = 100;
+
+    // T19 (nợ L7): phân trang khi client gửi page; cùng bộ lọc và thứ tự với GetAllAsync
+    public async Task<QuestionPageDto> GetPageAsync(string? textSearch, int? subjectId, int? questionTypeId, int? questionLevelId,
+        int? chapterId, IReadOnlyCollection<int>? tagIds, int page, int pageSize)
+    {
+        ValidateFilter(subjectId, questionTypeId, questionLevelId, chapterId, tagIds);
+        // Review T19 N1: (page − 1) × pageSize phải nằm trong int (OFFSET của SQL), nếu không trả 400 thay vì 500
+        if (page < 1 || pageSize is < 1 or > MaxPageSize || (long)(page - 1) * pageSize > int.MaxValue)
+            throw new BadRequestException($"page phải ≥ 1 (và không quá lớn), pageSize từ 1 đến {MaxPageSize}.");
+        var (items, total) = await _repository.GetQuestionsPageAsync(textSearch, subjectId, questionTypeId, questionLevelId, chapterId, tagIds, page, pageSize);
+        return new QuestionPageDto { Page = page, PageSize = pageSize, TotalCount = total, Items = items.Select(Map).ToList() };
+    }
+
+    private static void ValidateFilter(int? subjectId, int? questionTypeId, int? questionLevelId, int? chapterId, IReadOnlyCollection<int>? tagIds)
+    {
         if (new[] { subjectId, questionTypeId, questionLevelId, chapterId }.Any(x => x.HasValue && x.Value <= 0) ||
             (tagIds?.Any(x => x <= 0) ?? false))
             throw new BadRequestException("Bộ lọc phải là ID dương.");
         // Tổng kiểm (nợ T2 N-5): giới hạn số tag trong bộ lọc
         if (tagIds != null && tagIds.Distinct().Count() > MaxTagFilter) throw new BadRequestException($"Lọc tối đa {MaxTagFilter} tag.");
-        var items = await _repository.GetAllQuestionsAsync(textSearch, subjectId, questionTypeId, questionLevelId, chapterId, tagIds);
-        return items.Select(Map).ToList();
     }
 
     public async Task<QuestionResponseDto?> GetByIdAsync(int id)
@@ -32,14 +51,14 @@ public class QuestionService : IQuestionService
     public async Task<QuestionResponseDto?> CreateAsync(QuestionCreateDto dto)
     {
         await ValidateAllAsync(dto, null);
-        var created = await _repository.SaveWithAnswersAsync(null, Entity(dto), BuildAnswers(dto), TagIdsOf(dto));
+        var created = await SaveAsync(null, dto);
         return created == null ? null : Map(created);
     }
 
     public async Task<QuestionResponseDto?> UpdateAsync(int id, QuestionCreateDto dto)
     {
         await ValidateAllAsync(dto, id);
-        var updated = await _repository.SaveWithAnswersAsync(id, Entity(dto), BuildAnswers(dto), TagIdsOf(dto));
+        var updated = await SaveAsync(id, dto);
         return updated == null ? null : Map(updated);
     }
 
@@ -47,6 +66,13 @@ public class QuestionService : IQuestionService
 
     public async Task<List<QuestionSubjectDto>> GetSubjectsAsync() =>
         (await _repository.GetAvailableSubjectsAsync()).Select(x => new QuestionSubjectDto { Id = x.Id, Name = x.Name }).ToList();
+
+    // T19 (nợ L1): repository kiểm lại chương/tag trong transaction lưu; lỗi ở đó trả 400 với cùng message
+    private async Task<Question?> SaveAsync(int? id, QuestionCreateDto dto)
+    {
+        try { return await _repository.SaveWithAnswersAsync(id, Entity(dto), BuildAnswers(dto), TagIdsOf(dto)); }
+        catch (QuestionMetadataException ex) { throw new BadRequestException(ex.Message); }
+    }
 
     public const int MaxTagsPerQuestion = 10;
     public const int MaxTagFilter = 50;
@@ -157,7 +183,7 @@ public class QuestionService : IQuestionService
         Id = item.Id, Content = item.Content, CreatedDate = item.CreatedAt ?? item.CreatedDate,
         Status = item.Status, SubjectId = item.SubjectId, DocumentPath = item.DocumentPath,
         QuestionTypeId = item.QuestionTypeId, QuestionLevelId = item.QuestionLevelId,
-        IsUsedInExam = item.IsUsedInExam, ChapterId = item.ChapterId, Explanation = item.Explanation,
+        IsUsedInExam = item.IsUsedInExam, PreviousStatus = item.PreviousStatus, ChapterId = item.ChapterId, Explanation = item.Explanation,
         TagIds = item.QuestionTags.Select(x => x.TagId).OrderBy(x => x).ToList(), MediaCount = item.QuestionMedia.Count,
         ShortAnswerIgnoreDiacritics = item.ShortAnswerIgnoreDiacritics, ShortAnswerNumeric = item.ShortAnswerNumeric,
         ShortAnswerTolerance = item.ShortAnswerTolerance,
