@@ -139,7 +139,7 @@ namespace Project.Infrastructure.Persistence.Repositories
                 // Physical removal is safe only for questions never placed in an exam.
                 _context.Answers.RemoveRange(question.Answers);
                 // To-be T2: tập tag thay thế toàn bộ
-                _context.QuestionTags.RemoveRange(_context.QuestionTags.Where(x => x.QuestionId == id.Value));
+                _context.QuestionTags.RemoveRange(await _context.QuestionTags.Where(x => x.QuestionId == id.Value).ToListAsync());   // tổng kiểm (nợ T2 N-4): không I/O đồng bộ
                 await _context.SaveChangesAsync();
             }
             else

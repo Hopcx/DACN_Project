@@ -42,3 +42,12 @@ Câu multiple-choice có hai đáp án đúng: chọn một đáp án đúng ph�
 AllowViewResult=false phải bị chặn cả review endpoint trực tiếp. Sửa question sau khi đã nộp không đổi kết quả/history. Báo cáo không nhân bản bài nộp khi student có nhiều membership.
 
 Không đặt phần trăm coverage hoặc SLA tùy ý. Tải test và mục tiêu p95 dựa số thí sinh đồng thời/môi trường được chủ dự án cung cấp.
+
+## Cổng nghiệm thu To-be (T1–T18, bổ sung 25/11/2026)
+- **Không lộ đáp án:** mọi DTO làm bài (thi, luyện tập, thi thử) được kiểm bằng smoke để không chứa `isCorrect`, `matchId`, `matchContent`, `acceptedAnswers`, `correctItems`, `sourceAnswerId`. Đáp án chỉ có ở trang xem lại đã được mở, hoặc trong kết quả kiểm tra của câu đã chốt.
+- **Snapshot:** bài làm chấm và xem lại hoàn toàn theo snapshot lúc bắt đầu. Đổi phiên bản snapshot phải giữ đọc được mọi phiên bản cũ, và có unit test cho phiên bản cũ ngay trước nó.
+- **Một hàm chấm:** điểm, kiểm tra từng câu, outcome, báo cáo và xem lại dùng chung `AnswerGrading`. Thêm loại câu mới phải sửa ở một chỗ và có test cho cả 3 hàm chấm.
+- **Migration:** chỉ thêm (bảng, cột, seed có chặn). Down bị chặn khi đã có dữ liệu của tính năng. Mỗi migration phải qua `CutoverRehearsal.ps1` từ bản sao ProjectDACN.
+- **Tài liệu:** route mới của controller To-be phải có dòng trong `04-contracts/07-tobe-endpoints.md`. Smoke `TOBE_ENDPOINT_DOC` kiểm cả hai chiều. Smoke này **không** nằm trong `RunUatSuite.ps1`; chạy riêng trước khi nghiệm thu: `dotnet run --project tests/DependencyInjectionSmoke` (không cần SQL/API).
+- **Hồi quy:** `RunUatSuite.ps1` đầy đủ PASS trước khi merge vào `developer`. Mỗi lát được review độc lập, các mục Cao/Trung bình phải sửa trước khi commit.
+- **Hiệu năng:** endpoint nặng (xếp hạng, báo cáo lớp, phân tích, tạo phiên/mã đề) có p95 < 2 giây với bộ dữ liệu tải thử (`06-performance.md`).
