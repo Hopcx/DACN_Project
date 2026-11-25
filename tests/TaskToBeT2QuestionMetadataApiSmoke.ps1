@@ -30,6 +30,7 @@ function Call([string]$method, [string]$route, [string]$token, $body = $null) {
     $result = Invoke-WebRequest @p
     return @{ status = [int]$result.StatusCode; data = if ($result.Content -and $result.Headers.'Content-Type' -match 'json') { $result.Content | ConvertFrom-Json } else { $null } }
 }
+function ExpectText([string]$actual, [string]$expected, [string]$case) { if ($actual -cne $expected) { throw "$case expected $expected, got $actual" } }
 function Expect([int]$actual, [int]$expected, [string]$case) {
     if ($actual -ne $expected) { throw "$case expected HTTP $expected, got $actual" }
 }
@@ -146,6 +147,15 @@ SELECT '$($row[0])',N'T2 $($row[1])',N't2$($row[1])$tag',N't2$($row[1])$tag@exam
     if ($f.status -ne 400 -or $f.data.message -notmatch "tối đa 50 tag") { throw "Lọc 51 tag phải 400 (tối đa 50 tag), nhận $($f.status) $($f.data.message)" }
     $dup = (1..51 | ForEach-Object { "tagIds=$t1Id" }) -join "&"
     Expect (Call "GET" "/web/questions?subjectId=$subjectA&$dup" $qman).status 200 "51 lần cùng một tag (sau loại trùng là 1)"
+    # T19 (nợ L7): có page/pageSize → { page, pageSize, totalCount, items }; không có → mảng như cũ
+    $all = @((Call 'GET' "/web/questions?subjectId=$subjectA" $qman).data.data)
+    $p1 = (Call 'GET' "/web/questions?subjectId=$subjectA&page=1&pageSize=1" $qman).data.data
+    $p2 = (Call 'GET' "/web/questions?subjectId=$subjectA&page=2&pageSize=1" $qman).data.data
+    ExpectText "$($p1.page)/$($p1.pageSize)/$($p1.totalCount)/$(@($p1.items).Count)" "1/1/$($all.Count)/1" 'trang 1'
+    ExpectText "$(@($p1.items)[0].id),$(@($p2.items)[0].id)" "$($all[0].id),$($all[1].id)" 'trang 1, 2 theo thứ tự id'
+    $pt = (Call 'GET' "/web/questions?subjectId=$subjectA&tagIds=$t1Id&pageSize=50" $qman).data.data
+    ExpectText "$($pt.page)/$($pt.totalCount)" "1/$(@((Call 'GET' "/web/questions?subjectId=$subjectA&tagIds=$t1Id" $qman).data.data).Count)" 'totalCount theo bộ lọc, page mặc định 1'
+    foreach ($bad in 'page=0', 'pageSize=0', 'pageSize=101', 'page=21474838&pageSize=100') { Expect (Call 'GET' "/web/questions?subjectId=$subjectA&$bad" $qman).status 400 "phân trang sai ($bad)" }
     Expect (Call 'GET' '/web/questions?chapterId=-1' $qman).status 400 'chapterId âm'
     Expect (Call 'GET' '/web/questions?tagIds=0' $qman).status 400 'tagIds 0'
 
