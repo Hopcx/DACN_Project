@@ -24,7 +24,9 @@ public class QuestionExportController : ControllerBase
     private readonly AuditWriter _audit;
     public QuestionExportController(ProjectDACNDbContext db, AuditWriter audit) { _db = db; _audit = audit; }
 
-    private sealed record ExportIssue(int QuestionId, string Code, string Message);
+    // T19 (review N2): kèm đoạn đầu nội dung câu để FE hiện lỗi cho câu không nằm ở trang đang xem (ngân hàng phân trang)
+    private sealed record ExportIssue(int QuestionId, string Code, string Message, string Content);
+    private const int IssueContentLength = 120;
 
     // Cặp surrogate hợp lệ (ví dụ emoji) là ký tự XML hợp lệ; chỉ nửa surrogate lẻ hoặc ký tự điều khiển mới bị loại.
     private static bool HasInvalidXmlChar(string value)
@@ -70,7 +72,8 @@ public class QuestionExportController : ControllerBase
             var before = errors.Count;
             var content = question.Content.Trim();
             var answers = question.Answers.OrderBy(x => x.Id).ToList();
-            void Add(string code, string message) => errors.Add(new(question.Id, code, message));
+            void Add(string code, string message) => errors.Add(new(question.Id, code, message,
+                content.Length > IssueContentLength ? content[..IssueContentLength] + "…" : content));
 
             if (question.QuestionLevelId is null or <= 0) Add("LEVEL_MISSING", "Câu hỏi chưa có mức độ");
             var isShort = question.QuestionTypeId == ShortAnswerMatcher.QuestionTypeId;   // To-be T16

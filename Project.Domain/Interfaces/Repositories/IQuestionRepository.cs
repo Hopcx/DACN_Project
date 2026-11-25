@@ -12,6 +12,9 @@ namespace Project.Domain.Interfaces.Repositories
         // To-be T2: lọc thêm theo chương và tag (câu có ít nhất một tag trong danh sách)
         Task<List<Question>> GetAllQuestionsAsync(string? textSearch, int? subjectId, int? questionTypeId, int? questionLevelId,
             int? chapterId = null, IReadOnlyCollection<int>? tagIds = null);
+        /// <summary>T19 (nợ L7): một trang (page ≥ 1) theo cùng bộ lọc với GetAllQuestionsAsync, kèm tổng số câu khớp bộ lọc.</summary>
+        Task<(List<Question> Items, int TotalCount)> GetQuestionsPageAsync(string? textSearch, int? subjectId, int? questionTypeId,
+            int? questionLevelId, int? chapterId, IReadOnlyCollection<int>? tagIds, int page, int pageSize);
         Task<Question> GetQuestionByIdAsync(int id);
         Task<List<Question>> GetQuestionsBySubjectIdAsync(int subjectId);
         Task<Question> CreateQuestionAsync(Question question);

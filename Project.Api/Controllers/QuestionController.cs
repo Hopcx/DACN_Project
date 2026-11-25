@@ -10,6 +10,7 @@ namespace Project.Api.Controllers
     [Authorize(Policy = "QuestionManagement")]
     [Route("web/questions")]
     [Microsoft.AspNetCore.Authorization.Authorize(Policy = "QuestionManagement")]
+    [Project.Api.Services.DeadlockAsConflict]   // T19: lưu câu dùng Serializable; deadlock (chủ yếu hai PUT cùng một câu) → 409
     public class QuestionController : ControllerBase
     {
         private readonly IQuestionService _service;
@@ -24,8 +25,12 @@ namespace Project.Api.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll([FromQuery] string? textSearch, [FromQuery] int? subjectId,
             [FromQuery] int? questionTypeId, [FromQuery] int? questionLevelId,
-            [FromQuery] int? chapterId, [FromQuery] List<int>? tagIds)
+            [FromQuery] int? chapterId, [FromQuery] List<int>? tagIds, [FromQuery] int? page, [FromQuery] int? pageSize)
         {
+            // T19 (nợ L7): có page → trả một trang { page, pageSize, totalCount, items }; không có → mảng như trước (tương thích ngược)
+            if (page.HasValue || pageSize.HasValue)
+                return Ok(ApiResponse<QuestionPageDto>.Ok(await _service.GetPageAsync(textSearch, subjectId, questionTypeId, questionLevelId,
+                    chapterId, tagIds, page ?? 1, pageSize ?? 20)));
             var result = await _service.GetAllAsync(textSearch, subjectId, questionTypeId, questionLevelId, chapterId, tagIds);
             return Ok(ApiResponse<List<QuestionResponseDto>>.Ok(result));
         }
@@ -61,14 +66,14 @@ namespace Project.Api.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] QuestionCreateDto dto)
         {
-            var before = await _service.GetByIdAsync(id);
             var result = await _service.UpdateAsync(id, dto);
             if (result == null)
                 return await _service.GetByIdAsync(id) == null
                     ? NotFound(ApiResponse<string>.Fail("Question không tồn tại"))
                     : Conflict(ApiResponse<string>.Fail("Câu hỏi đã được sử dụng, không thể sửa đáp án hoặc nội dung."));
             // Đang ẩn (255) mà lưu với trạng thái 1 là "Hiện" lại câu hỏi
-            var action = before?.Status == 255 && result.Status == 1 ? "question.restore" : "question.update";
+            // T19 (nợ L2): trạng thái cũ lấy từ chính lần đọc trong transaction lưu
+            var action = result.PreviousStatus == 255 && result.Status == 1 ? "question.restore" : "question.update";
             await _audit.WriteAsync(User, action, "Question", id.ToString(), Describe(result));
 
             return Ok(ApiResponse<QuestionResponseDto>.Ok(result, "Cập nhật Question thành công"));

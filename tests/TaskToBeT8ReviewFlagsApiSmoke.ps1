@@ -119,6 +119,49 @@ SELECT @schedule;
     Expect (Call 'DELETE' "/web/student/practice/$($p2.body.data.id)" $token).status 200 'abandon session'
     Expect (Sql "SELECT COUNT(*) FROM dbo.ReviewFlags WHERE SourceKind='practice' AND SourceId='$($p2.body.data.id)';") '0' 'abandon removes flags'
     Expect (Sql "SELECT COUNT(*) FROM dbo.ReviewFlags WHERE UserId='$student';") '3' 'remaining flags (1 exam + 2 practice)'
+
+    # ---- T19 (nợ X7): các ca còn thiếu
+    Expect (FlagOn 'practice' $p2.body.data.id $p2.body.data.questions[0].id $token).status 404 'PUT on abandoned session'
+    Expect (FlagOn 'practice' $p1.body.data.id $pq[0].id $otherToken).status 404 'other PUT practice'
+    Expect (FlagOff 'practice' $p1.body.data.id $pq[0].id $otherToken).status 404 'other DELETE practice'
+    Expect (@((Flags 'practice' $p1.body.data.id $token).Split(','))).Count 2 'other cannot change practice flags'
+    $member = "UPDATE dbo.ClassUsers SET Status={0} WHERE UserId='$student' AND ClassId IN (SELECT Id FROM dbo.Classes WHERE ClassCode=N'T8-$tag');"
+    Sql ($member -f 0) | Out-Null   # thành viên chưa duyệt
+    Expect (Call 'GET' "/web/review-flags?sourceKind=exam&sourceId=$attempt" $token).status 404 'pending member GET exam'
+    Expect (FlagOn 'exam' $attempt $eq[1].id $token).status 404 'pending member PUT exam'
+    Expect (FlagOff 'exam' $attempt $eq[0].id $token).status 404 'pending member DELETE exam'
+    Sql ($member -f 1) | Out-Null
+    $classStatus = "UPDATE dbo.Classes SET Status={0} WHERE ClassCode=N'T8-$tag';"
+    Sql ($classStatus -f 0) | Out-Null   # lớp đóng
+    Expect (Call 'GET' "/web/review-flags?sourceKind=exam&sourceId=$attempt" $token).status 404 'closed class GET exam'
+    Expect (FlagOn 'exam' $attempt $eq[1].id $token).status 404 'closed class PUT exam'
+    Sql ($classStatus -f 1) | Out-Null
+    Expect (Flags 'exam' $attempt $token) "$($eq[0].id)" 'exam flags unchanged after 404s'
+    # PUT song song với bỏ phiên: app lock theo học viên xếp hàng hai thao tác → không còn cờ mồ côi
+    foreach ($round in 1..3) {
+        $p3 = Call 'POST' '/web/student/practice' $token @{ subjectId = $subject; questionCount = 2 }
+        Expect $p3.status 201 "create practice for race $round"
+        $p3Id = $p3.body.data.id; $qIds = @($p3.body.data.questions | ForEach-Object { $_.id })
+        # Review T19 N5: mọi runspace chờ chung một mốc giờ rồi mới gửi, để PUT và bỏ phiên thật sự xen kẽ
+        $at = [DateTime]::UtcNow.AddSeconds(3)
+        $statuses = 0..7 | ForEach-Object -ThrottleLimit 8 -Parallel {
+            $u = "$($using:BaseUrl)/web/review-flags"; $h = @{ Authorization = "Bearer $($using:token)" }
+            $wait = ($using:at) - [DateTime]::UtcNow
+            if ($wait -gt [TimeSpan]::Zero) { Start-Sleep -Milliseconds ([int]$wait.TotalMilliseconds) }
+            if ($_ -eq 4) {
+                $r = Invoke-WebRequest "$($using:BaseUrl)/web/student/practice/$($using:p3Id)" -Method Delete -Headers $h -SkipCertificateCheck -SkipHttpErrorCheck
+                "abandon:$([int]$r.StatusCode)"
+            } else {
+                $body = @{ sourceKind = 'practice'; sourceId = $using:p3Id; questionId = ($using:qIds)[$_ % 2] } | ConvertTo-Json -Compress
+                $r = Invoke-WebRequest $u -Method Put -Headers $h -ContentType 'application/json' -Body $body -SkipCertificateCheck -SkipHttpErrorCheck
+                "put:$([int]$r.StatusCode)"
+            }
+        }
+        if ('abandon:200' -notin $statuses) { throw "race $round abandon failed: $($statuses -join ',')" }
+        if (@($statuses | Where-Object { $_ -notin 'abandon:200', 'put:200', 'put:404' }).Count -gt 0) { throw "race $round unexpected: $($statuses -join ',')" }
+        Expect (Sql "SELECT CONCAT((SELECT COUNT(*) FROM dbo.PracticeSessions WHERE Id='$p3Id'),'|',(SELECT COUNT(*) FROM dbo.ReviewFlags WHERE SourceKind='practice' AND SourceId='$p3Id'));") '0|0' "race $round leaves no orphan flag"
+        Write-Output "  race ${round}: $(($statuses | Sort-Object) -join ',')"
+    }
     Write-Output "TOBE_T8_REVIEW_FLAGS_SMOKE=PASS;DB=$Database;TAG=$tag"
 }
 finally {

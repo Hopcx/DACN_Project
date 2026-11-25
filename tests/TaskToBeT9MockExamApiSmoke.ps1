@@ -141,6 +141,16 @@ SELECT @s;
     $mine = Call 'GET' "$base/mine?page=1&pageSize=10" $token
     Expect (@($mine.body.data.items | Where-Object { $_.kind -eq 'mock' })).Count 3 'history has 3 mocks'
     Expect (Call 'DELETE' "$base/$($retry.body.data.id)" $token).status 200 'abandon open mock'
+    # T19 (nợ L5): thi thử hết giờ (chưa chốt hoặc worker vừa chốt) có thời gian làm bài = hạn − lúc tạo, không phải "—"
+    $m3 = Call 'POST' $base $token @{ subjectId = $subject; questionCount = 1; kind = 'mock'; durationMinutes = 5 }
+    Expect $m3.status 201 'create mock 3'
+    # phiên 5 phút tạo từ 5 phút trước, hạn đã qua 10 giây (quá ân hạn 5 giây)
+    Sql "UPDATE dbo.PracticeSessions SET CreatedAtUtc=DATEADD(second,-310,SYSUTCDATETIME()), DeadlineUtc=DATEADD(second,-10,SYSUTCDATETIME()) WHERE Id='$($m3.body.data.id)';" | Out-Null
+    $row = @((Call 'GET' "$base/mine?page=1&pageSize=10" $token).body.data.items | Where-Object { $_.id -eq $m3.body.data.id })[0]
+    $expectSeconds = Sql "SELECT DATEDIFF(second,CreatedAtUtc,DeadlineUtc) FROM dbo.PracticeSessions WHERE Id='$($m3.body.data.id)';"
+    if ($row.state -notin 'expired', 'finished') { throw "mock 3 state $($row.state)" }
+    if ([Math]::Abs([long]$row.durationSeconds - [long]$expectSeconds) -gt 1) { throw "expired mock duration $($row.durationSeconds), expected ~$expectSeconds" }
+    Write-Output "  PASS thi thử hết giờ ($($row.state)): durationSeconds = $($row.durationSeconds)"
     Write-Output "TOBE_T9_MOCK_EXAM_SMOKE=PASS;DB=$Database;TAG=$tag"
 }
 finally {

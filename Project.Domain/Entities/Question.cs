@@ -57,6 +57,10 @@ namespace Project.Domain.Entities
         [NotMapped]
         public bool IsUsedInExam { get; set; }
 
+        /// <summary>T19 (nợ L2): trạng thái trước khi sửa (chỉ có sau SaveWithAnswersAsync với id); không lưu DB.</summary>
+        [NotMapped]
+        public byte? PreviousStatus { get; set; }
+
         public virtual QuestionLevel? QuestionLevel { get; set; }
 
         public virtual QuestionType QuestionType { get; set; } = null!;

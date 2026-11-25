@@ -47,8 +47,9 @@ public class PracticeController : ControllerBase
     private static AttemptSnapshot Snapshot(PracticeSession row) => JsonSerializer.Deserialize<AttemptSnapshot>(row.SnapshotJson, Json)!;
     private static IReadOnlyList<AttemptAnswerDto> Draft(PracticeSession row) =>
         JsonSerializer.Deserialize<List<AttemptAnswerDto>>(row.DraftJson, Json)!;
-    private static IReadOnlyList<Guid> Checked(PracticeSession row) =>
-        JsonSerializer.Deserialize<List<Guid>>(row.CheckedJson, Json) ?? new List<Guid>();
+    private static IReadOnlyList<Guid> Checked(PracticeSession row) => Checked(row.CheckedJson);
+    private static IReadOnlyList<Guid> Checked(string checkedJson) =>
+        JsonSerializer.Deserialize<List<Guid>>(checkedJson, Json) ?? new List<Guid>();
     // Cột datetime2 đọc ra Kind Unspecified: gắn UTC để JSON có hậu tố Z
     private static DateTime? Utc(DateTime? value) => value.HasValue ? DateTime.SpecifyKind(value.Value, DateTimeKind.Utc) : null;
 
@@ -292,16 +293,22 @@ public class PracticeController : ControllerBase
                 x.Kind, x.RevealMode, x.State, x.QuestionCount, x.CorrectCount, x.CreatedAtUtc, x.FinishedAtUtc, x.DeadlineUtc, x.CheckedJson
             }).ToListAsync();
         var now = DateTime.UtcNow;
-        var items = rows.Select(x => new
+        var items = rows.Select(x =>
         {
-            id = x.Id, subjectId = x.SubjectId, subjectName = x.SubjectName, kind = x.Kind, revealMode = x.RevealMode,
             // Thi thử quá hạn chưa kịp chốt: hiện là đã hết giờ (mở phiên sẽ chốt)
-            state = x.State == "inProgress" && PracticeTiming.IsExpired(x.DeadlineUtc, now) ? "expired" : x.State,
-            questionCount = x.QuestionCount, correctCount = x.CorrectCount,
-            createdAtUtc = Utc(x.CreatedAtUtc), finishedAtUtc = Utc(x.FinishedAtUtc), deadlineUtc = Utc(x.DeadlineUtc),
-            // Nợ sau T9: thời gian làm bài (đã nộp) và số câu đã kiểm tra (FE ẩn "Bỏ phiên" khi > 0)
-            durationSeconds = x.FinishedAtUtc.HasValue ? (long?)Math.Max(0, Math.Round((x.FinishedAtUtc.Value - x.CreatedAtUtc).TotalSeconds)) : null,
-            checkedCount = (JsonSerializer.Deserialize<List<Guid>>(x.CheckedJson, Json) ?? new List<Guid>()).Count
+            var expired = x.State == "inProgress" && PracticeTiming.IsExpired(x.DeadlineUtc, now);
+            // Nợ sau T9: thời gian làm bài (đã nộp). T19 (nợ L5): hết giờ chưa chốt = đúng thời lượng được cấp (hạn − lúc tạo)
+            var end = x.FinishedAtUtc ?? (expired ? x.DeadlineUtc : null);
+            return new
+            {
+                id = x.Id, subjectId = x.SubjectId, subjectName = x.SubjectName, kind = x.Kind, revealMode = x.RevealMode,
+                state = expired ? "expired" : x.State,
+                questionCount = x.QuestionCount, correctCount = x.CorrectCount,
+                createdAtUtc = Utc(x.CreatedAtUtc), finishedAtUtc = Utc(x.FinishedAtUtc), deadlineUtc = Utc(x.DeadlineUtc),
+                durationSeconds = end.HasValue ? (long?)Math.Max(0, Math.Round((end.Value - x.CreatedAtUtc).TotalSeconds)) : null,
+                // Số câu đã kiểm tra (FE ẩn "Bỏ phiên" khi > 0)
+                checkedCount = Checked(x.CheckedJson).Count
+            };
         }).ToList();
         return Ok(ApiResponse<object>.Ok(new { page, pageSize, totalCount, items }));
     }

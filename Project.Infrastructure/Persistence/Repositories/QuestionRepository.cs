@@ -21,7 +21,21 @@ namespace Project.Infrastructure.Persistence.Repositories
         }
 
         public async Task<List<Question>> GetAllQuestionsAsync(string? textSearch, int? subjectId, int? questionTypeId, int? questionLevelId,
-            int? chapterId = null, IReadOnlyCollection<int>? tagIds = null)
+            int? chapterId = null, IReadOnlyCollection<int>? tagIds = null) =>
+            await WithUsage(await Filtered(textSearch, subjectId, questionTypeId, questionLevelId, chapterId, tagIds).OrderBy(x => x.Id).ToListAsync());
+
+        // T19 (nợ L7): một trang theo cùng bộ lọc và thứ tự Id; totalCount đếm trên bộ lọc, không tải nội dung
+        public async Task<(List<Question> Items, int TotalCount)> GetQuestionsPageAsync(string? textSearch, int? subjectId, int? questionTypeId,
+            int? questionLevelId, int? chapterId, IReadOnlyCollection<int>? tagIds, int page, int pageSize)
+        {
+            var query = Filtered(textSearch, subjectId, questionTypeId, questionLevelId, chapterId, tagIds);
+            var total = await query.CountAsync();
+            var items = await query.OrderBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+            return (await WithUsage(items), total);
+        }
+
+        private IQueryable<Question> Filtered(string? textSearch, int? subjectId, int? questionTypeId, int? questionLevelId,
+            int? chapterId, IReadOnlyCollection<int>? tagIds)
         {
             var query = _context.Questions.Include(x => x.Answers).Include(x => x.QuestionTags).Include(x => x.QuestionMedia).Include(x => x.Group).AsSplitQuery().AsNoTracking().AsQueryable();
             if (chapterId.HasValue) query = query.Where(x => x.ChapterId == chapterId.Value);
@@ -38,8 +52,11 @@ namespace Project.Infrastructure.Persistence.Repositories
             if (subjectId.HasValue) query = query.Where(x => x.SubjectId == subjectId.Value);
             if (questionTypeId.HasValue) query = query.Where(x => x.QuestionTypeId == questionTypeId.Value);
             if (questionLevelId.HasValue) query = query.Where(x => x.QuestionLevelId == questionLevelId.Value);
+            return query;
+        }
 
-            var questions = await query.OrderBy(x => x.Id).ToListAsync();
+        private async Task<List<Question>> WithUsage(List<Question> questions)
+        {
             var ids = questions.Select(x => x.Id).ToList();
             var used = await _context.ExamDetailQuestions.Where(x => ids.Contains(x.QuestionId))
                 .Select(x => x.QuestionId).Distinct().ToListAsync();
@@ -116,7 +133,12 @@ namespace Project.Infrastructure.Persistence.Repositories
         {
             var newTags = (tagIds ?? Array.Empty<int>()).Distinct().ToList();
             await using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            // T19 (nợ L1): kiểm lại chương/tag trong cùng transaction Serializable — khóa S/phạm vi giữ chương/tag
+            // đã đọc tới khi commit, nên ẩn chương/tắt tag (không mở transaction) phải chờ lần lưu xong; không lọt câu "mồ côi"
+            var problem = await MetadataProblemAsync(incoming.SubjectId, incoming.ChapterId, newTags, id);
+            if (problem != null) throw new QuestionMetadataException(problem);
             Question question;
+            byte? previousStatus = null;
             if (id.HasValue)
             {
                 question = await _context.Questions.Include(x => x.Answers)
@@ -125,6 +147,7 @@ namespace Project.Infrastructure.Persistence.Repositories
                     await _context.AnswerSubmissions.AnyAsync(x => x.QuestionId == id.Value) ||
                     await _context.QuestionAnswers.AnyAsync(x => x.QuestionId == id.Value))
                     return null;
+                previousStatus = question.Status;   // T19 (nợ L2): để controller phân loại audit, không đọc thêm lần nữa
                 question.Content = incoming.Content;
                 question.Status = incoming.Status;
                 question.SubjectId = incoming.SubjectId;
@@ -157,7 +180,9 @@ namespace Project.Infrastructure.Persistence.Repositories
                 _context.QuestionTags.Add(new QuestionTag { QuestionId = question.Id, TagId = tagId });
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
-            return await GetQuestionByIdAsync(question.Id);
+            var saved = await GetQuestionByIdAsync(question.Id);
+            if (saved != null) saved.PreviousStatus = previousStatus;
+            return saved;
         }
 
         public async Task<bool> ReferencesExistAsync(int subjectId, int questionTypeId, int? questionLevelId) =>
