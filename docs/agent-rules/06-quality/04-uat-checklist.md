@@ -58,5 +58,25 @@ Tài khoản thử: tạo bằng giao diện Admin hoặc đăng ký + xác minh
 | S7 | Rời tab | Chuyển tab khi làm bài | Số lần rời tab tăng | P1 Acceptance (API) — **Tay** trình duyệt thật | |
 | S8 | Lịch sử | Mở lịch sử | "Lần x/y", "Đã hủy" khi bị hủy | P1 Role | |
 
+## To-be T1–T18 (bổ sung 25/11/2026)
+
+Smoke tự động tương ứng nằm trong `RunUatSuite.ps1` (tên `TaskToBeT*`). Contract chi tiết: `04-contracts/07-tobe-endpoints.md`.
+
+| # | Chức năng | Bước kiểm | Kết quả mong đợi | Tự động | Đạt? |
+|---|---|---|---|---|---|
+| B1 | Chương / tag / lời giải | Người ra đề thêm câu có chương, tag, lời giải | Lọc theo chương/tag đúng; tag trùng sau chuẩn hóa báo có sẵn | T2 API, P4 Frontend | |
+| B2 | Câu điền ngắn | Thêm câu loại 4 với 2 đáp án chấp nhận, bật "Bỏ dấu" | Học viên trả lời không dấu vẫn đúng; xem lại thấy "Đáp án chấp nhận" | T16 API + FE | |
+| B3 | Ghép cặp / nhiều mệnh đề | Thêm câu loại 5 (3 cặp) và loại 6 (3 mệnh đề) | Học viên chọn vế ghép/Đúng–Sai; sai một mục là sai cả câu | T17 API + FE | |
+| B4 | Ảnh / âm thanh | Gắn ảnh PNG và MP3 cho câu; thử file .exe đổi đuôi .png | Học viên xem ảnh, nghe được; file giả bị từ chối | T14 API + FE, T15 | |
+| B5 | Đoạn dùng chung | Tạo đoạn (chữ + ảnh) cho 3 câu; tạo mã đề chọn 1 câu của đoạn | Mã đề tự chọn cả đoạn; học viên thấy đoạn trên câu 1–3 | T18 API + FE | |
+| B6 | Media mồ côi | Admin mở "Media mồ côi" | Chỉ thấy media không ai dùng, tải lên ≥ 24 giờ; xóa được | T15 FE | |
+| B7 | Excel câu hỏi | Xuất rồi nhập lại file có loại 4–6 | Cột G cho loại 4; câu thuộc đoạn bị bỏ qua và có thông báo | T16, T17, T18 API | |
+| P1 | Luyện tập | Học viên tạo phiên 10 câu, chế độ "kiểm tra từng câu" | Kiểm tra câu nào hiện đáp án câu đó; câu đã kiểm bị khóa | T5, T6, T7 FE | |
+| P2 | Thi thử | Tạo thi thử 10 phút, để hết giờ | Tự nộp khi hết giờ; không có "Kiểm tra câu này" | T9 API | |
+| P3 | Làm lại, đánh dấu | "Làm lại bộ này"; đánh dấu câu khi xem lại rồi tải lại trang | Phiên mới cùng câu (đoạn giữ nguyên); đánh dấu còn sau khi tải lại | T5, T8 | |
+| R1 | Xếp hạng lớp | Giảng viên mở tab Xếp hạng; học viên mở "Kết quả của tôi" | Thang 10, đồng hạng 1-1-3; học viên chỉ thấy hạng mình (lớp ≥ 5 người có điểm) | T10 API + FE | |
+| R2 | Phân tích học viên | Học viên mở "Phân tích" | Theo chương/tag, nhãn Yếu/Cần cải thiện/Khá/Tốt; nút luyện tập chương yếu | T11 API + FE | |
+| R3 | Báo cáo lớp + Excel | Giảng viên mở tab Báo cáo, bấm "Xuất Excel" | Học viên yếu theo chương, câu hay sai; file 4 sheet mở được bằng Excel | T12, T13 API — **Tay** mở file bằng Excel thật | |
+
 ## Ngoài phạm vi UAT lần này
-Xếp hạng (F24), đa tổ chức (F25), quên mật khẩu, xuất báo cáo — chưa có API/quyết định (`05-migration/01-parity-matrix.md`).
+Đa tổ chức (F25), quên mật khẩu — chưa có API/quyết định (`05-migration/01-parity-matrix.md`). Xóa dữ liệu tự động (Q15) — chưa có chính sách, xem runbook §9.

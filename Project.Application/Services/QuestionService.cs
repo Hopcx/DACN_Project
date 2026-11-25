@@ -17,6 +17,8 @@ public class QuestionService : IQuestionService
         if (new[] { subjectId, questionTypeId, questionLevelId, chapterId }.Any(x => x.HasValue && x.Value <= 0) ||
             (tagIds?.Any(x => x <= 0) ?? false))
             throw new BadRequestException("Bộ lọc phải là ID dương.");
+        // Tổng kiểm (nợ T2 N-5): giới hạn số tag trong bộ lọc
+        if (tagIds != null && tagIds.Distinct().Count() > MaxTagFilter) throw new BadRequestException($"Lọc tối đa {MaxTagFilter} tag.");
         var items = await _repository.GetAllQuestionsAsync(textSearch, subjectId, questionTypeId, questionLevelId, chapterId, tagIds);
         return items.Select(Map).ToList();
     }
@@ -47,6 +49,7 @@ public class QuestionService : IQuestionService
         (await _repository.GetAvailableSubjectsAsync()).Select(x => new QuestionSubjectDto { Id = x.Id, Name = x.Name }).ToList();
 
     public const int MaxTagsPerQuestion = 10;
+    public const int MaxTagFilter = 50;
 
     private async Task ValidateAllAsync(QuestionCreateDto dto, int? questionId)
     {

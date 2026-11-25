@@ -30,6 +30,7 @@ MediaSmoke.Run();
 ShortAnswerSmoke.Run();
 MatchingStatementsSmoke.Run();
 QuestionGroupsSmoke.Run();
+EndpointDocSmoke.Run();
 QuestionWorkbookSmoke.Run();
 QuestionExportSmoke.Run();
 AccountWorkbookSmoke.Run();
