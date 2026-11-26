@@ -31,6 +31,7 @@ ShortAnswerSmoke.Run();
 MatchingStatementsSmoke.Run();
 QuestionGroupsSmoke.Run();
 EndpointDocSmoke.Run();
+await ReverseProxySmoke.Run();
 QuestionWorkbookSmoke.Run();
 QuestionExportSmoke.Run();
 AccountWorkbookSmoke.Run();

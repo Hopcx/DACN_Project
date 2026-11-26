@@ -1,0 +1,18 @@
+# T20: chỉ gửi mã nguồn cần build vào Docker (không gửi secret, dữ liệu, kết quả build)
+**/bin/
+**/obj/
+**/.vs/
+**/*.user
+**/logs/
+**/.maildrop/
+dacn-media-dev/
+.git/
+.bangiao/
+.claude/
+tests/
+docs/
+deploy/.env
+deploy/backups/
+**/appsettings.Development.json
+**/*.pfx
+**/*.bak

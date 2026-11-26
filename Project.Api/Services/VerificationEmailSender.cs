@@ -46,7 +46,8 @@ public class VerificationEmailSender : IVerificationEmailSender
         };
         using var client = new SmtpClient(host, int.TryParse(_config["Mail:SmtpPort"], out var port) ? port : 587)
         {
-            EnableSsl = true,
+            // T20: mặc định bật (STARTTLS). Chỉ tắt cho máy nhận thư giả khi diễn tập (Mailpit trong mạng Docker nội bộ)
+            EnableSsl = _config.GetValue("Mail:EnableSsl", true),
             UseDefaultCredentials = false,
             Credentials = new NetworkCredential(_config["Mail:SmtpUser"], _config["Mail:SmtpPassword"])
         };
