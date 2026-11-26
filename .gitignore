@@ -365,3 +365,9 @@ FodyWeavers.xsd
 
 # To-be T14: thư mục media mặc định khi chạy Development (Media:RootPath = ../dacn-media-dev tính từ Project.Api)
 /dacn-media-dev/
+
+# T20: cấu hình và backup của bản triển khai Docker (chứa secret/dữ liệu) — không commit
+deploy/.env
+deploy/.env.*
+!deploy/.env.example
+deploy/backups/

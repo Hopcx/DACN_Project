@@ -1,0 +1,14 @@
+# T20: CHỈ dùng khi diễn tập trên máy dev (Docker Desktop), KHÔNG dùng trên VPS.
+#   docker compose --env-file .env -f docker-compose.yml -f docker-compose.rehearsal.yml up -d --build
+# - Mailpit nhận email xác minh thay SMTP thật (giao diện http://127.0.0.1:8025, chỉ mở trên loopback).
+# - Trong .env diễn tập: SITE_HOST=localhost, HSTS_MAX_AGE=0, SMTP_HOST=mailpit, SMTP_PORT=1025, SMTP_ENABLE_SSL=false.
+services:
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "127.0.0.1:8025:8025"
+    networks: [dacn]
