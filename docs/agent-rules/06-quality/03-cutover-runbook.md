@@ -27,13 +27,16 @@ API **từ chối khởi động** nếu thiếu (FACT: `Project.Api/Program.cs`
 | Khóa | Ghi chú |
 |---|---|
 | `ConnectionStrings__Default` | Trỏ `ProjectDACN` trên máy chủ thật; tài khoản DB chỉ có quyền cần thiết (không `sysadmin`). |
-| `JwtSettings__SecretKey` | Sinh mới, ≥ 32 byte ngẫu nhiên; **không** dùng giá trị trong `appsettings.json`. Đổi khóa làm mọi phiên cũ hết hạn. |
+| `JwtSettings__SecretKey` | Sinh mới, ≥ 32 byte ngẫu nhiên; **không** dùng giá trị trong `appsettings.json` (T20: trùng khóa đã commit hoặc < 32 byte → API dừng khởi động). Đổi khóa làm mọi phiên cũ hết hạn. |
 | `JwtSettings__Issuer`, `JwtSettings__Audience` | Giữ như `appsettings.json` nếu không có yêu cầu khác. |
 | `JwtSettings__ExpiryMinutes` | Thời hạn access token; code giới hạn trong 1–15 phút (`Project.Application/Services/JwtService.cs`, `Math.Clamp(…, 1, 15)`), nên giá trị 60 trong `appsettings.json` thực tế thành 15. Phiên dài dựa vào refresh token. |
 | `Security__AllowedOrigins__0` | URL HTTPS của FE (vd. `https://dacn.<miền>`). Phải là https. |
 | `Mail__PublicFrontendUrl` | URL HTTPS của FE, dùng trong link xác minh email. |
 | `Mail__SmtpHost`, `Mail__SmtpPort` (mặc định 587, SSL bật), `Mail__From`, `Mail__SmtpUser`, `Mail__SmtpPassword` | SMTP thật (Q3). Người dùng tự điền secret. |
 | `ASPNETCORE_ENVIRONMENT` | `Production`. Swagger chỉ bật ở Development. |
+| `Proxy__Enabled`, `Proxy__KnownNetworks__0` | T20: chạy sau reverse proxy thì bật và khai báo CIDR của mạng proxy (Docker: `DOCKER_SUBNET`). Bật mà thiếu mạng → dừng khởi động. Chỉ tin `X-Forwarded-*` từ mạng này; không chuyển hướng HTTPS (proxy đã ép). |
+| `Media__RootPath`, `Media__SigningKey` | Thư mục media ngoài wwwroot (Docker: volume `/var/lib/dacn/media`); khóa ký URL media ≥ 32 byte. Thiếu → dừng khởi động. |
+| `Mail__EnableSsl` | Mặc định `true` (STARTTLS). Chỉ đặt `false` khi diễn tập với máy nhận thư giả (log cảnh báo). |
 
 ## 4. Trình tự cutover (nâng cấp tại chỗ `ProjectDACN`)
 
@@ -68,11 +71,105 @@ API **từ chối khởi động** nếu thiếu (FACT: `Project.Api/Program.cs`
 - Lệnh SQL tay (sqlcmd/SSMS script) ghi vào `ExamAttempts`, `PracticeSessions` hoặc bảng có index lọc khác phải bật `SET QUOTED_IDENTIFIER ON` (sqlcmd dùng `-I`), nếu không sẽ lỗi 1934. EF/API tự bật.
 - Backup định kỳ theo chính sách được chọn và thử restore định kỳ bằng `tests/CutoverRehearsal.ps1`.
 
-## 7. Chờ quyết định (Q1 = chưa chốt nơi chạy)
+## 7. Triển khai bằng Docker trên VPS Linux (Q1 = Docker, T20 — 25/11/2026)
 
-Cách host API (IIS + ASP.NET Core Module / Windows Service / Docker), cách phục vụ FE tĩnh với fallback SPA (không trả `index.html` cho `/web/*`), chứng chỉ HTTPS, tài khoản dịch vụ SQL và lịch backup. Viết thêm mục này khi người dùng chốt máy đích.
+Đây là cách chạy thật đã chốt (QT20-1…6 = a). Bố cục:
 
-Lưu ý khi chốt: API bật `UseHttpsRedirection`, nên probe health gọi bằng **HTTP** sẽ nhận 307 thay vì 200 — cấu hình giám sát gọi thẳng HTTPS, hoặc cho probe nội bộ đi qua cổng HTTPS.
+- **Container:**
+  - `sql`: SQL Server 2025 Express. Cổng 1433 **không** mở ra ngoài.
+  - `api`: ASP.NET Core, HTTP 8080, chỉ chạy trong mạng nội bộ của Docker.
+  - `web`: Caddy. Phục vụ FE tĩnh, tự lấy và gia hạn chứng chỉ HTTPS Let's Encrypt, chuyển `/web/*` sang `api`.
+- **Volume:**
+  - `sql-data`: dữ liệu SQL.
+  - `media`: file media.
+  - `api-logs`: log của Serilog.
+  - `dp-keys`: khóa DataProtection (mã hóa cookie CSRF). Phải giữ qua các lần deploy, nếu mất thì mọi người đang đăng nhập bị đăng xuất một lần. Không cần backup.
+  - `caddy-data`, `caddy-config`: chứng chỉ và cấu hình của Caddy.
+  - Thư mục backup trên máy chủ: `deploy/backups` (không gắn vào container). SQL Server ghi `.bak` vào thư mục tạm trong container rồi script chép ra/vào bằng `docker compose cp`, nên không cần chown và chạy giống nhau trên Linux lẫn Docker Desktop.
+- **File cấu hình:**
+  - `DACN_Project/deploy/`: `docker-compose.yml`, `api.Dockerfile`, `.env.example`, `deploy.sh`, `restore-db.sh`, `backup.sh`.
+  - `DACN_FE/`: `Dockerfile`, `deploy/Caddyfile`.
+- **Secret** chỉ nằm trong `deploy/.env` trên máy chủ. File này không commit và nên có quyền `600`.
+
+Diễn tập toàn bộ trên Docker Desktop thì thêm `docker-compose.rehearsal.yml` (Mailpit thay SMTP) và chạy `tests/DockerRehearsalSmoke.ps1`. Đừng dùng file compose diễn tập này trên VPS.
+
+### 7.1 Chuẩn bị (một lần)
+1. **VPS:** Ubuntu 22.04 hoặc 24.04, ≥ 2 vCPU, **≥ 4 GB RAM** (SQL Server cần tối thiểu 2 GB), ≥ 40 GB đĩa. Cài Docker Engine và plugin compose theo hướng dẫn chính thức của Docker, rồi thêm user vào nhóm `docker`.
+2. **Tường lửa:** chỉ mở 22 (SSH), 80 và 443 (TCP), 443/udp. Ví dụ `ufw allow OpenSSH; ufw allow 80/tcp; ufw allow 443; ufw enable`.
+3. **DNS:** tạo bản ghi **A** (IPv4) cho tên miền, trỏ về IP của VPS. Caddy chỉ lấy được chứng chỉ khi tên miền đã trỏ đúng và cổng 80/443 đã mở.
+   - **Không tạo bản ghi AAAA (IPv6).** Mạng Docker trong compose chỉ có IPv4, nên kết nối IPv6 đi qua docker-proxy với IP nguồn là gateway. Khi đó mọi người dùng IPv6 sẽ dùng chung một hạn mức đăng nhập (review T20 N5). Muốn hỗ trợ IPv6 thì phải bật `enable_ipv6` kèm một subnet v6 cho mạng `dacn` và khai báo subnet đó trong `Proxy__KnownNetworks`.
+4. **Mã nguồn:** clone **cạnh nhau**: `/opt/dacn/DACN_Project` và `/opt/dacn/DACN_FE`, nhánh `developer`.
+5. **Cấu hình:**
+   - Chạy `cd /opt/dacn/DACN_Project/deploy && cp .env.example .env && chmod 600 .env` rồi điền đủ các khóa.
+   - Sinh `JWT_SECRET_KEY` và `MEDIA_SIGNING_KEY` bằng `openssl rand -base64 48`. Hai khóa phải khác nhau và **không** được là khóa có trong `appsettings.json`; nếu trùng, API sẽ từ chối khởi động.
+   - Mật khẩu có ký tự đặc biệt thì đặt trong nháy đơn.
+   - `PUBLIC_ORIGIN` phải là `https://<tên miền>`, không kèm dấu `/` ở cuối.
+6. **Thư mục backup:** `deploy/backups` được script tự tạo; chỉ cần user chạy script ghi được vào đó.
+
+### 7.2 Chuyển dữ liệu (QT20-3)
+1. **Trên máy cũ:**
+   - Dừng ghi dữ liệu.
+   - Backup: `BACKUP DATABASE [ProjectDACN] TO DISK = N'…\ProjectDACN_move.bak' WITH COPY_ONLY, CHECKSUM, INIT;` rồi `RESTORE VERIFYONLY … WITH CHECKSUM;`.
+   - Nén thư mục media, tức `Media:RootPath` của máy cũ (mặc định Development là `dacn-media-dev` nằm cạnh repo).
+2. **Chép lên VPS** bằng `scp`:
+   - File `.bak` → `deploy/backups/`.
+   - File media nén → thư mục tạm.
+3. **Khôi phục DB:** `./restore-db.sh ProjectDACN_move.bak`.
+   - Script kiểm CHECKSUM, khôi phục DB, rồi tạo login `DB_APP_USER` chỉ có quyền `db_datareader`, `db_datawriter`, `EXECUTE`.
+   - Cuối cùng script in `migrations=… users=… subjects=… questions=… media_rows=…`. So các số này với máy cũ bằng cùng truy vấn.
+   - DB đã tồn tại thì script dừng. Chỉ thêm `--replace` khi chắc chắn, và nên chạy `backup.sh` trước.
+4. **Đưa media vào volume:** chạy `./deploy.sh` một lần để tạo các container, rồi chép file media vào volume:
+   ```bash
+   docker compose --env-file .env cp <thư-mục-media-đã-giải-nén>/. api:/var/lib/dacn/media/
+   docker compose --env-file .env exec -u 0 api chown -R 1654:1654 /var/lib/dacn/media
+   ```
+   Uid 1654 là user `app` của image `aspnet:8.0`. Kiểm số file trong volume khớp với `media_rows`.
+5. **File backup từ SQL Server 2025** chỉ khôi phục được lên container 2025 trở lên. Máy cũ hiện chạy 17.0, compatibility level 170.
+
+### 7.3 Triển khai, cập nhật, quay về (QT20-4)
+- **Triển khai hoặc cập nhật:** chạy `./deploy.sh`. Script làm lần lượt:
+  1. Kiểm `.env`: đủ khóa, PUBLIC_ORIGIN là https, mỗi khóa ≥ 32 byte, hai khóa khác nhau.
+  2. `git pull --ff-only` cả hai repo.
+  3. Gắn tag `:previous` cho image đang chạy.
+  4. Build image mới rồi `up -d`.
+  5. Chờ `sql` và `api` healthy, rồi gọi `https://<miền>/web/health/ready` qua Caddy.
+
+  Script in `DEPLOY_OK` khi đạt, kèm digest của image SQL đang chạy. Ghi digest đó vào `MSSQL_IMAGE=` trong `.env` để lần deploy sau và lúc rollback dùng đúng bản đã chạy tốt.
+- **Có migration mới (QT20-5)** thì **không** để API tự migrate. Theo thứ tự:
+  1. Chạy `./backup.sh`.
+  2. Ở máy dev, sinh script: `dotnet ef migrations script <migration-cuối-trên-VPS> --no-build --project Project.Infrastructure --startup-project Project.Api -o cutover.sql`, rồi review. **Không** dùng `--idempotent` (xem §4).
+  3. Chép `cutover.sql` lên VPS rồi áp: `docker compose --env-file .env exec -T sql bash -c 'SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -d ProjectDACN -b -I -f 65001 -i /dev/stdin' < cutover.sql`.
+  4. Chạy `./deploy.sh`.
+- **Quay về bản trước:** chạy `./deploy.sh --rollback`.
+  - Script chỉ quay về bản **đã từng in `DEPLOY_OK`**: bản đang chạy chưa qua kiểm tra thì về `:good`; bản đang chạy chính là `:good` thì về `:previous`. Tag `:good` chỉ được gắn sau khi `DEPLOY_OK`.
+  - Nếu bản lỗi đã áp migration, phải khôi phục DB từ backup trước khi quay về: `./restore-db.sh <bản backup trước migration> --replace`. Script tự dừng API trong lúc khôi phục, rồi trả DB về MULTI_USER và khởi động lại API, kể cả khi khôi phục lỗi.
+- **Xem log:** `docker compose --env-file .env logs -f api`. Serilog còn ghi file trong volume `api-logs`.
+
+### 7.4 Backup (QT20-6)
+- Chạy `./backup.sh`. Mỗi lần script:
+  - backup DB (`COPY_ONLY, CHECKSUM`) và `RESTORE VERIFYONLY`;
+  - nén media cùng thời điểm;
+  - chỉ giữ `BACKUP_KEEP` bản mới nhất (mặc định 7).
+- **Chạy tự động hằng ngày** bằng cron:
+  `30 2 * * * cd /opt/dacn/DACN_Project/deploy && ./backup.sh >> backups/backup.log 2>&1`.
+- **Bắt buộc có bản sao ngoài VPS.** Mất VPS thì mất luôn mọi backup nằm trên đó. Ví dụ, từ máy khác chạy định kỳ `scp vps:/opt/dacn/DACN_Project/deploy/backups/*_$(date -u +%Y%m%d)_* <thư mục an toàn>`.
+- **Thử khôi phục mỗi tháng một lần** trên máy khác (hoặc Docker Desktop) bằng `restore-db.sh`. Một bản backup chưa từng khôi phục thử thì chưa đủ tin cậy.
+
+### 7.5 Go / no-go cho Docker (bổ sung §2)
+1. `tests/DockerRehearsalSmoke.ps1` PASS trên Docker Desktop, với dữ liệu khôi phục từ backup của DB bản sao.
+2. `deploy.sh` in `DEPLOY_OK` trên VPS; `https://<miền>/` mở được, chứng chỉ hợp lệ.
+3. Smoke tay trên VPS:
+   - đăng ký tài khoản thử và **nhận email thật** qua SMTP;
+   - đăng nhập Admin;
+   - tải lên và xem một ảnh;
+   - mở báo cáo lớp và tải `report.xlsx`;
+   - xóa tài khoản thử.
+4. `./backup.sh` chạy được, và đã có một bản sao lưu nằm ngoài VPS.
+
+**Lưu ý vận hành:**
+- API chạy sau proxy với `Proxy:Enabled=true`. API chỉ tin header `X-Forwarded-*` từ `Proxy:KnownNetworks` (mạng Docker `DOCKER_SUBNET`), nên rate limit tính theo IP thật của người dùng.
+- Khi chạy sau proxy, API **không** chuyển hướng HTTPS, vì Caddy đã ép HTTPS. Probe health trong container gọi `http://localhost:8080`.
+- Đổi `DOCKER_SUBNET` thì phải `docker compose down` rồi `up` lại để mạng Docker được tạo lại. Volume giữ nguyên dữ liệu.
 
 ## 8. Ghi chú vận hành từ diễn tập
 

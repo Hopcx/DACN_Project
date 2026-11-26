@@ -8,6 +8,7 @@ using Project.Api.Middlewares;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Microsoft.AspNetCore.DataProtection;
 using Serilog;
 using Serilog.Events;
 using Project.Api.Extensions;
@@ -88,6 +89,13 @@ namespace Project.Api
                 // Health: live = tiến trình chạy; ready = kết nối được SQL Server (G7)
                 builder.Services.AddHealthChecks()
                     .AddCheck<Project.Api.HealthChecks.DatabaseHealthCheck>("db", tags: new[] { "ready" });
+                // Review T20 N1: khóa DataProtection (mã hóa cookie antiforgery) phải bền qua các lần tạo lại container,
+                // nếu không mỗi lần deploy mọi phiên đang đăng nhập hỏng CSRF ở /auth/refresh → bị đăng xuất.
+                // Docker: DataProtection__KeysPath = volume riêng /var/lib/dacn/dp-keys. Không đặt → mặc định (hồ sơ người dùng).
+                var dataProtectionKeys = builder.Configuration["DataProtection:KeysPath"];
+                if (!string.IsNullOrWhiteSpace(dataProtectionKeys))
+                    builder.Services.AddDataProtection().SetApplicationName("DACN")
+                        .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeys));
                 builder.Services.AddScoped<AuthCsrfFilter>();
                 builder.Services.AddAntiforgery(options =>
                 {
@@ -224,6 +232,14 @@ namespace Project.Api
                     if (!Uri.TryCreate(frontendUrl, UriKind.Absolute, out var frontendUri) || frontendUri.Scheme != "https")
                         throw new InvalidOperationException("Configure HTTPS Mail:PublicFrontendUrl before startup");
                     _ = app.Services.GetRequiredService<IVerificationEmailSender>();
+                    // T20: khóa JWT phải đặt riêng cho môi trường chạy (biến môi trường/secret), không dùng khóa đã commit trong appsettings.json
+                    var committedJwtKey = new ConfigurationBuilder().SetBasePath(app.Environment.ContentRootPath)
+                        .AddJsonFile("appsettings.json", optional: true).Build()["JwtSettings:SecretKey"];
+                    var jwtKey = app.Configuration["JwtSettings:SecretKey"] ?? "";
+                    if (System.Text.Encoding.UTF8.GetByteCount(jwtKey) < 32 || jwtKey == committedJwtKey)
+                        throw new InvalidOperationException("Configure a dedicated JwtSettings:SecretKey (>= 32 bytes, not the committed default) before startup");
+                    if (!app.Configuration.GetValue("Mail:EnableSsl", true))
+                        Log.Warning("Mail:EnableSsl = false ngoài Development — chỉ dùng cho diễn tập với máy nhận thư giả, không dùng khi chạy thật.");
                 }
 
                 // Cấu hình HTTP request pipeline
@@ -239,8 +255,12 @@ namespace Project.Api
                 //app.UseAuthorization();
 
                 // ===== CÁCH MỚI: Exception middleware với custom exception và logging =====
+                // T20: sau reverse proxy — IP/scheme thật từ proxy tin cậy, trước mọi middleware dùng IP (rate limit) hay scheme
+                var proxy = ReverseProxySettings.From(app.Configuration, app.Environment);
+                if (proxy.Enabled) app.UseForwardedHeaders(proxy.ForwardedOptions());
                 app.UseMiddleware<ExceptionMiddleware>();
-                app.UseHttpsRedirection();
+                // Proxy đã ép HTTPS; healthcheck trong container gọi HTTP trực tiếp nên không chuyển hướng khi chạy sau proxy
+                if (!proxy.Enabled) app.UseHttpsRedirection();
                 // Review T14: trần thân request tải media = giới hạn cấu hình (Media:*) + phần dư multipart, đặt trước khi Kestrel đệm form
                 var mediaUploadCap = app.Services.GetRequiredService<MediaSettings>().Limits.MaxUploadBytes + 64 * 1024;
                 app.Use(async (context, next) =>

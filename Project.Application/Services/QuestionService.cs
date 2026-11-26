@@ -160,7 +160,7 @@ public class QuestionService : IQuestionService
     private static Question Entity(QuestionCreateDto dto) => new()
     {
         Content = dto.Content.Trim(), Status = dto.Status ?? 1, SubjectId = dto.SubjectId,
-        CreatedDate = DateTime.Now, CreatedAt = DateTime.Now,
+        CreatedDate = DateTime.UtcNow, CreatedAt = DateTime.UtcNow,   // review T20 T10: container chạy UTC; thống nhất với đường nhập Excel
         QuestionTypeId = dto.QuestionTypeId, QuestionLevelId = dto.QuestionLevelId,
         DocumentPath = dto.DocumentPath, ChapterId = dto.ChapterId,
         Explanation = string.IsNullOrWhiteSpace(dto.Explanation) ? null : dto.Explanation.Trim(),
